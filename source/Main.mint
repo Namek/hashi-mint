@@ -1,42 +1,275 @@
-store Game {
-  state puzzle : Puzzle = { islands = [], connections = [], width = 0, height = 0, maxConnectionCount = 0 }
-  state puzzleStart : Puzzle = puzzle
-  state isPuzzleDone : Bool = false
-  state moveHistory : Array(Vec2) = []
-  state islandDrag: IslandDrag = IslandDrag::NoIslandsHovered
+store Const {
+  state fieldSize : Number = 10
+  state scaleFactor : Number = 5
+  state margin : Number = 4
 
-  fun stepBack : Promise(Never, Void) {
-    next {
-      moveHistory = moveHistory |> Array.slice(0, Array.size(moveHistory))
-    }
+  /* fieldSize / 2 */
+  state circleRadius : Number = 5
+
+  state connectionLineMargin : Number = 3
+}
+
+store Game {
+  state puzzle : Puzzle = {
+    islands =
+      {
+        list = [],
+        fields = Map.empty()
+      },
+    connections =
+      {
+        list = [],
+        fieldss = Map.empty()
+      },
+    width = 0,
+    height = 0,
+    maxConnectionCount = 2
   }
 
-  fun reset : Promise(Never, Void)  {
+  state puzzleStart : Puzzle = puzzle
+  state isPuzzleDone : Bool = false
+  state moveHistory : Array(IndexPair) = []
+  state islandDrag : IslandDrag = IslandDrag::NoIslandsHovered
+
+  fun setPuzzle (p : Puzzle) : Promise(Never, Void) {
+    next
+      {
+        puzzle = p,
+        puzzleStart = p,
+        isPuzzleDone = false,
+        moveHistory = [],
+        islandDrag = IslandDrag::NoIslandsHovered
+      }
+  }
+
+  fun stepBack : Promise(Never, Void) {
+    next
+      {
+        moveHistory =
+          moveHistory
+          |> Array.slice(0, Array.size(moveHistory))
+      }
+  }
+
+  fun reset : Promise(Never, Void) {
     next { puzzle = puzzleStart }
   }
 
-  fun getIslandRenderPos(index : Number) : Vec2 {
-    { x = Model.idxX(puzzle.width, index * Const.fieldSize + Const.circleRadius),
-      y = Model.idxY(puzzle.width, index * Const.fieldSize + Const.circleRadius) }
-  }
-
-  fun isIslandHovered(idx : Number) : Bool {
-    case (islandDrag) {
-      IslandDrag::NoIslandsHovered => false
-      IslandDrag::FirstIslandHovered idx1  => idx1 == idx
-      IslandDrag::FirstIslandPinned idx1 => idx1 == idx
-      IslandDrag::SecondIslandPicked percent idx1 idx2 =>
-        idx1 == idx || idx2 == idx
+  fun getIslandRenderPos (index : Number) : Vec2 {
+    {
+      x = Model.idxX(puzzle.width, index) * Const.fieldSize + Const.circleRadius,
+      y = Model.idxY(puzzle.width, index) * Const.fieldSize + Const.circleRadius
     }
   }
 
+  fun isIslandHovered (idx : Number) : Bool {
+    case (islandDrag) {
+      IslandDrag::NoIslandsHovered => false
+      IslandDrag::FirstIslandHovered idx1 => idx1 == idx
+      IslandDrag::FirstIslandPinned idx1 => idx1 == idx
+      IslandDrag::SecondIslandPicked percent idx1 idx2 => idx1 == idx || idx2 == idx
+    }
+  }
+
+  fun gotIslandHovered (islandIndex : Number, evt : Html.Event) : Promise(Never, Void) {
+    case (islandDrag) {
+      IslandDrag::NoIslandsHovered => next { islandDrag = IslandDrag::FirstIslandHovered(islandIndex) }
+      IslandDrag::FirstIslandHovered => next { islandDrag = IslandDrag::FirstIslandHovered(islandIndex) }
+      => next {  }
+    }
+  }
+
+  fun gotIslandUnhovered (islandIndex : Number, evt : Html.Event) : Promise(Never, Void) {
+    case (islandDrag) {
+      IslandDrag::FirstIslandHovered => next { islandDrag = IslandDrag::NoIslandsHovered }
+      => next {  }
+    }
+  }
+
+  fun gotDragShouldStop : Promise(Never, Void) {
+    case (islandDrag) {
+      IslandDrag::SecondIslandPicked percent idx1 idx2 =>
+        try {
+          newPuzzle =
+            Model.switchIslandConnections(
+              TimeDirection::Forward,
+              idx1,
+              idx2,
+              puzzle)
+
+          newMoveHistory =
+            Array.push({
+              idx1 = idx1,
+              idx2 = idx2
+            }, moveHistory)
+
+          newIsPuzzleDone =
+            false
+
+          next
+            {
+              islandDrag = IslandDrag::NoIslandsHovered,
+              puzzle = newPuzzle,
+              moveHistory = newMoveHistory,
+              isPuzzleDone = newIsPuzzleDone
+            }
+        }
+
+      => next { islandDrag = IslandDrag::NoIslandsHovered }
+    }
+  }
+
+  fun pinIsland (islandIndex : Number, evt : Html.Event) : Promise(Never, Void) {
+    next { islandDrag = IslandDrag::FirstIslandPinned(islandIndex) }
+  }
+
+  fun checkBridgeDirection (evt : Html.Event) : Promise(Never, Void) {
+    try {
+      inputPos =
+        Html.Extra.getOffsetPos(evt)
+
+      maybeFirstIslandIndex =
+        case (islandDrag) {
+          IslandDrag::FirstIslandPinned idx => Maybe::Just(idx)
+          IslandDrag::SecondIslandPicked percent idx1 idx2 => Maybe::Just(idx1)
+          => Maybe::Nothing
+        }
+
+      maybeFirstIslandIndex
+      |> Maybe.Extra.andThen(
+        (i1Idx : Number) : Maybe(Triple(Number, Number, Number)) {
+          try {
+            islandPos =
+              getIslandRenderPos(i1Idx)
+
+            rescaledPos =
+              Game.rescalePosInputToLogic(inputPos)
+
+            direction =
+              directionFromPoint(
+                physicalRenderPos(rescaledPos),
+                physicalRenderPos(islandPos))
+
+            neighbour =
+              Model.findNeighbourIsland(puzzle, i1Idx, direction)
+
+            case (neighbour) {
+              Maybe::Just i2Idx =>
+                try {
+                  neighbourPos =
+                    getIslandRenderPos(i2Idx)
+
+                  cond =
+                    Math.abs(neighbourPos.x - islandPos.x) > Math.abs(neighbourPos.y - islandPos.y)
+
+                  to =
+                    if (cond) {
+                      neighbourPos.x
+                    } else {
+                      neighbourPos.y
+                    }
+
+                  from =
+                    if (cond) {
+                      islandPos.x
+                    } else {
+                      islandPos.y
+                    }
+
+                  pos =
+                    if (cond) {
+                      rescaledPos.x
+                    } else {
+                      rescaledPos.y
+                    }
+
+                  distancePercent =
+                    pos
+                    |> Util.Math.rescale(from, to, 0, 1)
+                    |> Math.min(1)
+
+                  Maybe::Just(Triple::A(i1Idx, i2Idx, distancePercent))
+                }
+
+              => Maybe::Nothing
+            }
+          }
+        })
+      |> Maybe.Extra.andThen(
+        (triple : Triple(Number, Number, Number)) : Maybe(IslandDrag) {
+          case (triple) {
+            Triple::A i1Idx i2Idx distancePercent =>
+              if (Model.canDraw(puzzle, i1Idx, i2Idx)) {
+                Maybe::Just(IslandDrag::SecondIslandPicked(distancePercent, i1Idx, i2Idx))
+              } else {
+                case (islandDrag) {
+                  IslandDrag::SecondIslandPicked a b c => Maybe::Just(IslandDrag::NoIslandsHovered)
+                  => Maybe::Nothing
+                }
+              }
+          }
+        })
+      |> Maybe.map(
+        (newDrag : IslandDrag) : Promise(Never, Void) {
+          next { islandDrag = newDrag }
+        })
+      |> Maybe.withDefault(next {  })
+    }
+  }
+
+  fun rescalePosInputToLogic (pos : Vec2) : Vec2 {
+    {
+      x =
+        Util.Math.rescale(
+          0,
+          puzzle.width * Const.fieldSize * Const.scaleFactor,
+          -1 * Const.margin,
+          puzzle.width * Const.fieldSize + Const.margin,
+          pos.x),
+      y =
+        Util.Math.rescale(
+          0,
+          puzzle.height * Const.fieldSize * Const.scaleFactor,
+          -1 * Const.margin,
+          puzzle.height * Const.fieldSize + Const.margin,
+          pos.y)
+    }
+  }
+
+  fun physicalRenderPos (pos : Vec2) : Vec2 {
+    {
+      x = (pos.x - Const.margin) * Const.scaleFactor,
+      y = (pos.y - Const.margin) * Const.scaleFactor
+    }
+  }
+
+  fun directionFromPoint (from : Vec2, to : Vec2) : Direction {
+    if (Math.abs(dx) > Math.abs(dy)) {
+      if (dx > 0) {
+        Direction::Left
+      } else {
+        Direction::Right
+      }
+    } else if (dy > 0) {
+      Direction::Up
+    } else {
+      Direction::Down
+    }
+  } where {
+    dx =
+      to.x - from.x
+
+    dy =
+      to.y - from.y
+  }
 }
 
 enum IslandDrag {
   NoIslandsHovered
   FirstIslandHovered(Number)
   FirstIslandPinned(Number)
-  /*percent, island1Index, island2Index*/
+
+  /* percent, island1Index, island2Index */
   SecondIslandPicked(Number, Number, Number)
 }
 
@@ -54,19 +287,29 @@ component Main {
     }
   }
 
-
   fun render : Html {
-    <div::base>
+    <div::base
+      onPointerLeave={Game.gotDragShouldStop}
+      onPointerUp={Game.gotDragShouldStop}>
+
       <div>
-        <button onClick={Game.stepBack} disabled={Game.moveHistory == []}>
+        <{ Number.toString(fieldSize * scaleFactor) }>
+        <{ Number.toString(puzzle.width) }>
+
+        <button
+          onClick={Game.stepBack}
+          disabled={Game.moveHistory == []}>
+
           "Step Back"
+
         </button>
+
         <button onClick={Game.reset}>
           "Reset"
         </button>
       </div>
 
-      <{renderPuzzle()}>
+      <{ renderPuzzle() }>
 
       if (Game.isPuzzleDone) {
         "Puzzle Done"
@@ -79,97 +322,153 @@ component Main {
     <svg
       width={Number.toString(puzzle.width * fieldSize * scaleFactor)}
       height={Number.toString(puzzle.height * fieldSize * scaleFactor)}
-      viewBox={"-#{margin} -#{margin} #{puzzle.width * fieldSize + margin * 2} #{puzzle.height * fieldSize + margin * 2}"}
-    >
-      <{Array.map(renderConnection, puzzle.connections)}>
+      viewBox="-#{margin} -#{margin} #{puzzle.width * fieldSize + margin * 2} #{puzzle.height * fieldSize + margin * 2}"
+      onPointerMove={Game.checkBridgeDirection}>
 
-      <{
-        case (Game.islandDrag) {
-          IslandDrag::SecondIslandPicked percent idx1 idx2 =>
-            renderTemporaryBridge(idx1, idx2, percent)
+      <{ Array.map(renderConnection, puzzle.connections.list) }>
 
-          => <g></g>
-        }
-      }>
+      case (Game.islandDrag) {
+        IslandDrag::SecondIslandPicked percent idx1 idx2 => renderTemporaryBridge(idx1, idx2, percent)
 
-      for (island of puzzle.islands) {
+        => Html.empty()
+      }
+
+      for (island of puzzle.islands.list) {
         renderIsland(island)
       }
+
     </svg>
   }
 
-  fun renderConnection(conn : Connection) : Html {
-    <div></div>
-  }
+  fun renderConnection (conn : Connection) : Html {
+    case (conn.connectionSize) {
+      0 => Html.empty()
 
-  fun renderTemporaryBridge(idx1 : Number, idx2 : Number, percent : Number) : Html {
-    try {
-      start = Game.getIslandRenderPos(idx1)
-      to = Game.getIslandRenderPos(idx2)
-      dx = to.x - start.x
-      dy = to.y - start.y
-      endX = start.x + dx * percent
-      endY = start.y + dy * percent
-      lineStyle = "stroke:rgb(0,255,0);stroke-width:5"
+      =>
+        try {
+          count =
+            conn.connectionSize
 
-      Render.line(start.x, start.y, endX, endY, lineStyle)
+          start =
+            Game.getIslandRenderPos(conn.idx1)
+
+          end =
+            Game.getIslandRenderPos(conn.idx2)
+
+          renderLines(count, start, end, conn.orientation)
+        }
     }
   }
 
-  fun renderIsland(island : Island) : Html {
-    <g>
-      <{Render.circle(number, pos.x, pos.y, isHovered, isFilled)}>
+  fun renderLines (
+    count : Number,
+    start : Vec2,
+    end : Vec2,
+    orientation : Orientation
+  ) : Html {
+    <g/>
+  } where {
+    m =
+      (Const.connectionLineMargin) / -2
+
+    distances =
+      case (count) {
+        1 => [0]
+
+        2 =>
+          [
+            m / -2,
+            m / 2
+          ]
+
+        3 => [m * -1]
+
+        4 => [-1 * (m * 3 / 2)]
+
+        => []
+      }
+
+    zeros =
+      Util.Collection.repeat(0, count)
+
+    zipFn =
+      (x : Number, y : Number) : Vec2 {
+        {
+          x = x,
+          y = y
+        }
+      }
+
+    coordDiffs =
+      case (orientation) {
+        Orientation::Vertical => Util.Collection.zip(zipFn, distances, zeros)
+        Orientation::Horizontal => Util.Collection.zip(zipFn, zeros, distances)
+      }
+
+    lineStyle =
+      "stroke:rgb(255,0,0);stroke-width:0.5"
+
+    lines =
+      for (d of coordDiffs) {
+        Util.Render.line(
+          start.x + d.x,
+          start.y + d.y,
+          end.x + d.x,
+          end.y + d.y,
+          lineStyle)
+      }
+  }
+
+  fun renderTemporaryBridge (idx1 : Number, idx2 : Number, percent : Number) : Html {
+    try {
+      start =
+        Game.getIslandRenderPos(idx1)
+
+      to =
+        Game.getIslandRenderPos(idx2)
+
+      dx =
+        to.x - start.x
+
+      dy =
+        to.y - start.y
+
+      endX =
+        start.x + dx * percent
+
+      endY =
+        start.y + dy * percent
+
+      lineStyle =
+        "stroke:rgb(0,255,0);stroke-width:5"
+
+      Util.Render.line(start.x, start.y, endX, endY, lineStyle)
+    }
+  }
+
+  fun renderIsland (island : Island) : Html {
+    <g
+      onPointerOver={Game.gotIslandHovered(island.index)}
+      onPointerLeave={Game.gotIslandUnhovered(island.index)}
+      onPointerDown={Game.pinIsland(island.index)}>
+
+      <{ Util.Render.circle(number, pos.x, pos.y, isHovered, isFilled) }>
+
     </g>
   } where {
-    maxConns = island.maxConnectionCounts
-    number = maxConns.top + maxConns.right + maxConns.bottom + maxConns.left
-    pos = Game.getIslandRenderPos(island.index)
-    isHovered = Game.isIslandHovered(island.index)
-    isFilled = Model.isIslandFilled(island)
-  }
-}
+    maxConns =
+      island.maxConnectionCounts
 
-store Const {
-  state fieldSize : Number = 10
-  state scaleFactor : Number = 5
-  state margin : Number = 4
-  state circleRadius : Number = 5 /*fieldSize / 2*/
-  state connectionLineMargin : Number = 3
-}
+    number =
+      maxConns.top + maxConns.right + maxConns.bottom + maxConns.left
 
-module Render {
-  fun circle(number : Number, posX : Number, posY : Number, isHovered : Bool, isFilled : Bool) : Html {
-    <g>
-      <circle
-        cx={Number.toString(posX)}
-        cy={Number.toString(posY)}
-        r={Number.toString(Const.circleRadius)}
-        fill="TODO"
-        stroke={color(0, 0, 0)}
-      />
-      <text
-        x={Number.toString(posX)}
-        y={Number.toString(posY)}
-        textAnchor="middle"
-        dominantBaseline="central"
-        fontSize="#{Const.circleRadius}"
-      >
-        "#{number}"
-      </text>
-    </g>
-  }
+    pos =
+      Game.getIslandRenderPos(island.index)
 
-  fun line(startX : Number, startY : Number, endX : Number, endY : Number, lineStyle : String) : Html {
-    <line
-      x1={Number.toString(startX)}
-      y1={Number.toString(startY)}
-      x2={Number.toString(endX)}
-      y2={Number.toString(endY)}
-      style={lineStyle}
-    />
-  }
+    isHovered =
+      Game.isIslandHovered(island.index)
 
-  fun color(r : Number, g : Number, b : Number) : String {
-    "rgb(#{r}, #{g}, #{b})"
+    isFilled =
+      Model.isIslandFilled(island)
   }
 }
