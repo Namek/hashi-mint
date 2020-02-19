@@ -55,7 +55,8 @@ store Game {
                 puzzle),
             moveHistory =
               moveHistory
-              |> Array.dropRight(1)
+              |> Array.dropRight(1),
+            isPuzzleDone = false
           }
 
       => next {  }
@@ -115,7 +116,7 @@ store Game {
             }, moveHistory)
 
           newIsPuzzleDone =
-            false
+            Model.isSuccessfullyFinished(newPuzzle)
 
           next
             {
@@ -323,7 +324,9 @@ component Main {
       <{ renderPuzzle() }>
 
       if (Game.isPuzzleDone) {
-        "Puzzle Done"
+        <div>
+          "Puzzle Done!"
+        </div>
       }
 
     </div>

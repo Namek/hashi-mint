@@ -508,12 +508,11 @@ module Model {
   }
 
   fun isSuccessfullyFinished (puzzle : Puzzle) : Bool {
-    puzzle.islands.list
-    |> Array.any(isIslandNotFilled)
+    !Array.any(isIslandNotFilled, puzzle.islands.list)
   } where {
     isIslandNotFilled =
       (island : Island) : Bool {
-        isIslandFilled(island)
+        !isIslandFilled(island)
       }
   }
 
