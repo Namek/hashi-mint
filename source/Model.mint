@@ -117,6 +117,16 @@ module Model {
     }
   }
 
+  fun distanceBetweenIslands (width : Number, idx1 : Number, idx2 : Number) : Number {
+    Math.max(dx, dy)
+  } where {
+    dx =
+      idxX(width, idx1) - idxX(width, idx2)
+
+    dy =
+      idxY(width, idx1) - idxY(width, idx2)
+  }
+
   fun directionToConnectionSize (sizes : ConnectionSizes, dir : Direction) : Number {
     case (dir) {
       Direction::Up => sizes.top
@@ -197,28 +207,314 @@ module Model {
       }
   }
 
+  fun changeConnectionSizeForIslandNeighbour (
+    neighbourDirection : Direction,
+    newConnectionSize : Number,
+    island : Island
+  ) : Island {
+    {
+      index = island.index,
+      maxConnectionCounts = island.maxConnectionCounts,
+      currentConnectionCounts =
+        {
+          top = newTop,
+          right = newRight,
+          bottom = newBottom,
+          left = newLeft
+        }
+    }
+  } where {
+    curConns =
+      island.currentConnectionCounts
+
+    newTop =
+      if (neighbourDirection == Direction::Up) {
+        newConnectionSize
+      } else {
+        curConns.top
+      }
+
+    newRight =
+      if (neighbourDirection == Direction::Right) {
+        newConnectionSize
+      } else {
+        curConns.right
+      }
+
+    newBottom =
+      if (neighbourDirection == Direction::Down) {
+        newConnectionSize
+      } else {
+        curConns.bottom
+      }
+
+    newLeft =
+      if (neighbourDirection == Direction::Left) {
+        newConnectionSize
+      } else {
+        curConns.left
+      }
+  }
+
+  fun switchValue (
+    min : Number,
+    max : Number,
+    timeDirection : TimeDirection,
+    current : Number
+  ) : Number {
+    if (step > max) {
+      min
+    } else if (step < min) {
+      max
+    } else {
+      step
+    }
+  } where {
+    diff =
+      case (timeDirection) {
+        TimeDirection::Forward => 1
+        TimeDirection::Backward => -1
+      }
+
+    step =
+      current + diff
+  }
+
+  /*
+   Do the most basic mechanic of the game - switch a connection size between two islands.
+
+  Does not check for a collision since it is called after the drag is stopped.
+  However, it does check the current states of islands.
+  */
   fun switchIslandConnections (
     timeDirection : TimeDirection,
     idx1 : Number,
     idx2 : Number,
     puzzle : Puzzle
   ) : Puzzle {
-    try {
-      sortedIdx1 =
-        Math.min(idx1, idx2)
-
-      sortedIdx2 =
-        Math.max(idx1, idx2)
-
-      island1 =
-        getIslandByIndex(puzzle.islands, sortedIdx1)
-
-      island2 =
-        getIslandByIndex(puzzle.islands, sortedIdx2)
-
-      /* TODO */
-      puzzle
+    { puzzle |
+      connections = newConnections,
+      islands = newIslands
     }
+  } where {
+    sortedIdx1 =
+      Math.min(idx1, idx2)
+
+    sortedIdx2 =
+      Math.max(idx1, idx2)
+
+    island1 =
+      getIslandByIndex(puzzle.islands, sortedIdx1)
+
+    island2 =
+      getIslandByIndex(puzzle.islands, sortedIdx2)
+
+    foundConn =
+      puzzle.connections.list
+      |> Util.Collection.findAndGetRest(
+        (conn : Connection) : Bool {
+          conn.idx1 == sortedIdx1 && conn.idx2 == sortedIdx2
+        })
+
+    maybeConn =
+      case (foundConn) {
+        FirstRest::A first rest => first
+      }
+
+    restConns =
+      case (foundConn) {
+        FirstRest::A first rest => rest
+      }
+
+    /* we need to check up local maximums for both islands */
+    commonMaxNewConnectionsCount =
+      Math.min(
+        island1
+        |> Maybe.map(getIslandFreeConnectionSize)
+        |> Maybe.withDefault(0),
+        island2
+        |> Maybe.map(getIslandFreeConnectionSize)
+        |> Maybe.withDefault(0))
+
+    newConnectionsWithNewConnectionSize =
+      case (maybeConn) {
+        Maybe::Nothing =>
+          try {
+            /* insert a new connection */
+            connectionOrientation =
+              directionFromIsland(puzzle.width, idx1, idx2)
+              |> directionToOrientation()
+
+            newConnection =
+              {
+                idx1 = sortedIdx1,
+                idx2 = sortedIdx2,
+                connectionSize = 1,
+                orientation = connectionOrientation
+              }
+
+            Pair::A(Array.push(newConnection, puzzle.connections.list), 1)
+          }
+
+        Maybe::Just conn =>
+          try {
+            /* replace the found one */
+            commonMaxConnectionSize =
+              Math.min(
+                puzzle.maxConnectionCount,
+                (conn.connectionSize + commonMaxNewConnectionsCount))
+
+            newConnSize =
+              conn.connectionSize
+              |> switchValue(0, commonMaxConnectionSize, timeDirection)
+
+            newConnection =
+              {
+                idx1 = sortedIdx1,
+                idx2 = sortedIdx2,
+                connectionSize = newConnSize,
+                orientation = conn.orientation
+              }
+
+            Pair::A(Array.push(newConnection, restConns), newConnSize)
+          }
+      }
+
+    newConnectionList =
+      case (newConnectionsWithNewConnectionSize) {
+        Pair::A list size => list
+      }
+
+    newConnectionSize =
+      case (newConnectionsWithNewConnectionSize) {
+        Pair::A list size => size
+      }
+
+    dir1to2 =
+      directionFromIsland(puzzle.width, sortedIdx1, sortedIdx2)
+
+    diff =
+      directionToPosDiff(dir1to2)
+
+    startX =
+      idxX(puzzle.width, sortedIdx1)
+
+    startY =
+      idxY(puzzle.width, sortedIdx1)
+
+    stepCount =
+      distanceBetweenIslands(puzzle.width, sortedIdx1, sortedIdx2) - 2
+
+    iterate =
+      (
+        x : Number,
+        y : Number,
+        fields : Map(Number, IndexPair),
+        leftSteps : Number
+      ) : Map(Number, IndexPair) {
+        try {
+          idx =
+            xyIdx(puzzle.width, x, y)
+
+          maybeField =
+            Map.get(idx, fields)
+
+          if (Maybe.isJust(maybeField) && newConnectionSize == 0) {
+            Map.delete(idx, fields)
+          } else if (Maybe.isNothing(maybeField)) {
+            Map.set(
+              idx,
+              {
+                idx1 = sortedIdx1,
+                idx2 = sortedIdx2
+              },
+              fields)
+          } else if (leftSteps > 0) {
+            iterate((x + diff.x), (y + diff.y), fields, (leftSteps - 1))
+          } else {
+            fields
+          }
+        }
+      }
+
+    newConnectionFields =
+      iterate(
+        startX + diff.x,
+        startY + diff.y,
+        puzzle.connections.fieldss,
+        stepCount)
+
+    dir2to1 =
+      oppositeDirection(dir1to2)
+
+    newIsland1 =
+      island1
+      |> Maybe.map(
+        changeConnectionSizeForIslandNeighbour(
+          dir1to2,
+          newConnectionSize))
+
+    newIsland2 =
+      island2
+      |> Maybe.map(
+        changeConnectionSizeForIslandNeighbour(
+          dir2to1,
+          newConnectionSize))
+
+    newConnections =
+      {
+        list = newConnectionList,
+        fieldss = newConnectionFields
+      }
+
+    updateEachIsland =
+      (
+        currentIslands : Array(Island),
+        leftIslands : Array(Island)
+      ) : Array(Island) {
+        case (leftIslands[0]) {
+          Maybe::Nothing => currentIslands
+
+          Maybe::Just island =>
+            try {
+              rest =
+                Array.drop(1, leftIslands)
+
+              updatedIslands =
+                currentIslands
+                |> Util.Collection.updateFirst(
+                  ((i : Island) : Bool { i.index == island.index }),
+                  ((i : Island) : Island { island }))
+
+              updateEachIsland(updatedIslands, rest)
+            }
+        }
+      }
+
+    islandsToUpdate =
+      Maybe.Extra.values([
+        newIsland1,
+        newIsland2
+      ])
+
+    newIslandsList =
+      updateEachIsland(puzzle.islands.list, islandsToUpdate)
+
+    newIslands =
+      {
+        list = newIslandsList,
+        fields = puzzle.islands.fields
+      }
+  }
+
+  fun isSuccessfullyFinished (puzzle : Puzzle) : Bool {
+    puzzle.islands.list
+    |> Array.any(isIslandNotFilled)
+  } where {
+    isIslandNotFilled =
+      (island : Island) : Bool {
+        isIslandFilled(island)
+      }
   }
 
   fun getIslandByIndex (islands : Islands, idx : Number) : Maybe(Island) {
@@ -336,6 +632,10 @@ module Model {
             case (Map.get(idx, puzzle.connections.fieldss)) {
               Maybe::Just pair =>
                 if (pair.idx1 == expectedIdx1 && pair.idx2 == expectedIdx2) {
+                  /*
+                  If there is connection but it's the one between
+                  those same islands then we don't break the traversal
+                  */
                   iterate(x + diff.x, y + diff.y)
                 } else {
                   false

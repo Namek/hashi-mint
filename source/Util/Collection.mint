@@ -48,22 +48,20 @@ module Util.Collection {
   } where {
     iterate =
       (checked : Array(a), unchecked : Array(a)) : FirstRest(a) {
-        try {
-          case (unchecked[0]) {
-            Maybe::Nothing => FirstRest::A(Maybe::Nothing, [])
+        case (unchecked[0]) {
+          Maybe::Nothing => FirstRest::A(Maybe::Nothing, [])
 
-            Maybe::Just first =>
-              try {
-                rest =
-                  Array.drop(1, unchecked)
+          Maybe::Just first =>
+            try {
+              rest =
+                Array.drop(1, unchecked)
 
-                if (predicate(first)) {
-                  FirstRest::A(Maybe::Just(first), Array.append(checked, rest))
-                } else {
-                  iterate(Array.push(first, checked), rest)
-                }
+              if (predicate(first)) {
+                FirstRest::A(Maybe::Just(first), Array.append(Array.reverse(checked), rest))
+              } else {
+                iterate(Array.push(first, checked), rest)
               }
-          }
+            }
         }
       }
   }

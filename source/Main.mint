@@ -1,7 +1,7 @@
 store Const {
   state fieldSize : Number = 10
   state scaleFactor : Number = 5
-  state margin : Number = 4
+  state margin : Number = 2
 
   /* fieldSize / 2 */
   state circleRadius : Number = 5
@@ -43,16 +43,27 @@ store Game {
   }
 
   fun stepBack : Promise(Never, Void) {
-    next
-      {
-        moveHistory =
-          moveHistory
-          |> Array.slice(0, Array.size(moveHistory))
-      }
+    case (Array.last(moveHistory)) {
+      Maybe::Just move =>
+        next
+          {
+            puzzle =
+              Model.switchIslandConnections(
+                TimeDirection::Backward,
+                move.idx1,
+                move.idx2,
+                puzzle),
+            moveHistory =
+              moveHistory
+              |> Array.dropRight(1)
+          }
+
+      => next {  }
+    }
   }
 
   fun reset : Promise(Never, Void) {
-    next { puzzle = puzzleStart }
+    setPuzzle(puzzleStart)
   }
 
   fun getIslandRenderPos (index : Number) : Vec2 {
@@ -143,7 +154,7 @@ store Game {
               getIslandRenderPos(i1Idx)
 
             rescaledPos =
-              Game.rescalePosInputToLogic(inputPos)
+              rescalePosInputToLogic(inputPos)
 
             direction =
               directionFromPoint(
@@ -366,7 +377,9 @@ component Main {
     end : Vec2,
     orientation : Orientation
   ) : Html {
-    <g/>
+    <g>
+      <{ lines }>
+    </g>
   } where {
     m =
       (Const.connectionLineMargin) / -2

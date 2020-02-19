@@ -18,4 +18,8 @@ module Maybe.Extra {
       Maybe::Nothing => Maybe::Nothing
     }
   }
+
+  fun values (maybes : Array(Maybe(a))) : Array(a) {
+    Array.compact(maybes)
+  }
 }

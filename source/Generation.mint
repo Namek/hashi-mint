@@ -147,8 +147,7 @@ module Generation {
                     |> increaseIsland(bridge.idx2, sizes2)
 
                   restBridges =
-                    leftBridges
-                    |> Array.slice(1, Array.size(leftBridges))
+                    Array.drop(1, leftBridges)
 
                   addNextBridge(restBridges, newAcc)
                 }
