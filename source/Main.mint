@@ -21,6 +21,7 @@ store Game {
         list = [],
         fieldss = Map.empty()
       },
+    connectionsMaxList = [],
     width = 0,
     height = 0,
     maxConnectionCount = 2
@@ -68,9 +69,14 @@ store Game {
   }
 
   fun getIslandRenderPos (index : Number) : Vec2 {
-    {
-      x = Model.idxX(puzzle.width, index) * Const.fieldSize + Const.circleRadius,
-      y = Model.idxY(puzzle.width, index) * Const.fieldSize + Const.circleRadius
+    try {
+      {x, y} =
+        Model.idxXY(puzzle.width, index)
+
+      {
+        x = x * Const.fieldSize + Const.circleRadius,
+        y = y * Const.fieldSize + Const.circleRadius
+      }
     }
   }
 
@@ -110,10 +116,12 @@ store Game {
               puzzle)
 
           newMoveHistory =
-            Array.push({
-              idx1 = idx1,
-              idx2 = idx2
-            }, moveHistory)
+            Array.push(
+              {
+                idx1 = idx1,
+                idx2 = idx2
+              },
+              moveHistory)
 
           newIsPuzzleDone =
             Model.isSuccessfullyFinished(newPuzzle)
@@ -149,7 +157,7 @@ store Game {
 
       maybeFirstIslandIndex
       |> Maybe.Extra.andThen(
-        (i1Idx : Number) : Maybe(Triple(Number, Number, Number)) {
+        (i1Idx : Number) : Maybe(Tuple(Number, Number, Number)) {
           try {
             islandPos =
               getIslandRenderPos(i1Idx)
@@ -163,7 +171,7 @@ store Game {
                 physicalRenderPos(islandPos))
 
             neighbour =
-              Model.findNeighbourIsland(puzzle, i1Idx, direction)
+              Model.findNeighbourIsland(puzzle, i1Idx, direction, false)
 
             case (neighbour) {
               Maybe::Just i2Idx =>
@@ -200,7 +208,7 @@ store Game {
                     |> Util.Math.rescale(from, to, 0, 1)
                     |> Math.min(1)
 
-                  Maybe::Just(Triple::A(i1Idx, i2Idx, distancePercent))
+                  Maybe::Just({i1Idx, i2Idx, distancePercent})
                 }
 
               => Maybe::Nothing
@@ -208,9 +216,9 @@ store Game {
           }
         })
       |> Maybe.Extra.andThen(
-        (triple : Triple(Number, Number, Number)) : Maybe(IslandDrag) {
+        (triple : Tuple(Number, Number, Number)) : Maybe(IslandDrag) {
           case (triple) {
-            Triple::A i1Idx i2Idx distancePercent =>
+            {i1Idx, i2Idx, distancePercent} =>
               if (Model.canDraw(puzzle, i1Idx, i2Idx)) {
                 Maybe::Just(IslandDrag::SecondIslandPicked(distancePercent, i1Idx, i2Idx))
               } else {
@@ -299,12 +307,39 @@ component Main {
     }
   }
 
+  fun testRandom {
+    try {
+      rand0 =
+        Random.init(213104)
+
+      iter =
+        (i : Number, rand : Rand, numbers : Array(Number)) {
+          if (i < 100) {
+            try {
+              {num, rand1} =
+                Random.number(0, 100, rand)
+
+              iter(i + 1, rand1, Array.push(num, numbers))
+            }
+          } else {
+            numbers
+          }
+        }
+
+      iter(0, rand0, [])
+      |> Array.map((num : Number) { Number.toString(num) })
+      |> Array.intersperse(",")
+      |> Debug.log
+    }
+  }
+
   fun render : Html {
     <div::base
       onPointerLeave={Game.gotDragShouldStop}
       onPointerUp={Game.gotDragShouldStop}>
 
       <div>
+        /* <{ testRandom() }> */
         <{ Number.toString(fieldSize * scaleFactor) }>
         <{ Number.toString(puzzle.width) }>
 
@@ -339,11 +374,20 @@ component Main {
       viewBox="-#{margin} -#{margin} #{puzzle.width * fieldSize + margin * 2} #{puzzle.height * fieldSize + margin * 2}"
       onPointerMove={Game.checkBridgeDirection}>
 
-      <{ Array.map(renderConnection, puzzle.connections.list) }>
+      <{
+        Array.map(
+          renderConnection("stroke:rgb(255,0,0);stroke-width:0.5"),
+          puzzle.connections.list)
+      }>
+
+      <{
+        Array.map(
+          renderConnection("stroke:rgb(127,127,127);stroke-width:0.1"),
+          puzzle.connectionsMaxList)
+      }>
 
       case (Game.islandDrag) {
         IslandDrag::SecondIslandPicked percent idx1 idx2 => renderTemporaryBridge(idx1, idx2, percent)
-
         => Html.empty()
       }
 
@@ -354,7 +398,7 @@ component Main {
     </svg>
   }
 
-  fun renderConnection (conn : Connection) : Html {
+  fun renderConnection (lineStyle : String, conn : Connection) : Html {
     case (conn.connectionSize) {
       0 => Html.empty()
 
@@ -369,12 +413,13 @@ component Main {
           end =
             Game.getIslandRenderPos(conn.idx2)
 
-          renderLines(count, start, end, conn.orientation)
+          renderLines(lineStyle, count, start, end, conn.orientation)
         }
     }
   }
 
   fun renderLines (
+    lineStyle : String,
     count : Number,
     start : Vec2,
     end : Vec2,
@@ -398,9 +443,7 @@ component Main {
           ]
 
         3 => [m * -1]
-
         4 => [-1 * (m * 3 / 2)]
-
         => []
       }
 
@@ -420,9 +463,6 @@ component Main {
         Orientation::Vertical => Util.Collection.zip(zipFn, distances, zeros)
         Orientation::Horizontal => Util.Collection.zip(zipFn, zeros, distances)
       }
-
-    lineStyle =
-      "stroke:rgb(255,0,0);stroke-width:0.5"
 
     lines =
       for (d of coordDiffs) {
@@ -466,7 +506,10 @@ component Main {
     <g
       onPointerOver={Game.gotIslandHovered(island.index)}
       onPointerLeave={Game.gotIslandUnhovered(island.index)}
-      onPointerDown={Game.pinIsland(island.index)}>
+      onPointerDown={Game.pinIsland(island.index)}
+      data-idx={Number.toString(island.index)}
+      data-x={Number.toString(x)}
+      data-y={Number.toString(y)}>
 
       <{ Util.Render.circle(number, pos.x, pos.y, isHovered, isFilled) }>
 
@@ -486,5 +529,8 @@ component Main {
 
     isFilled =
       Model.isIslandFilled(island)
+
+    {x, y} =
+      Model.idxXY(puzzle.width, island.index)
   }
 }

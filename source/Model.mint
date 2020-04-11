@@ -1,6 +1,7 @@
 record Puzzle {
   islands : Islands,
   connections : Connections,
+  connectionsMaxList : Array(Connection),
   width : Number,
   height : Number,
   maxConnectionCount : Number
@@ -74,6 +75,10 @@ module Model {
 
   fun idxY (width : Number, idx : Number) : Number {
     Math.floor(idx / width)
+  }
+
+  fun idxXY (width : Number, idx : Number) : Tuple(Number, Number) {
+    {idx % width, Math.floor(idx / width)}
   }
 
   fun isIslandFilled (island : Island) : Bool {
@@ -176,7 +181,8 @@ module Model {
   fun traverseToNextIsland (
     puzzle : Puzzle,
     fromIndex : Number,
-    direction : Direction
+    direction : Direction,
+    shouldCheckCollisions : Bool
   ) : Maybe(Number) {
     iterate(startX + diff.x, startY + diff.y)
   } where {
@@ -198,9 +204,23 @@ module Model {
             idx =
               xyIdx(puzzle.width, x, y)
 
-            case (Map.get(idx, puzzle.islands.fields)) {
-              Maybe::Just true => Maybe::Just(idx)
-              => iterate(x + diff.x, y + diff.y)
+            shouldCheckIsland =
+              if (shouldCheckCollisions) {
+                case (Map.get(idx, puzzle.connections.fieldss)) {
+                  Maybe::Just whatever => false
+                  Maybe::Nothing => true
+                }
+              } else {
+                true
+              }
+
+            if (shouldCheckIsland) {
+              case (Map.get(idx, puzzle.islands.fields)) {
+                Maybe::Just true => Maybe::Just(idx)
+                => iterate(x + diff.x, y + diff.y)
+              }
+            } else {
+              Maybe::Nothing
             }
           }
         }
@@ -216,41 +236,49 @@ module Model {
       index = island.index,
       maxConnectionCounts = island.maxConnectionCounts,
       currentConnectionCounts =
-        {
-          top = newTop,
-          right = newRight,
-          bottom = newBottom,
-          left = newLeft
-        }
+        changeConnectionSizes(
+          (size : Number) : Number { newConnectionSize },
+          neighbourDirection,
+          island.currentConnectionCounts)
+    }
+  }
+
+  fun changeConnectionSizes (
+    newConnectionSizeGetter : Function(Number, Number),
+    neighbourDirection : Direction,
+    curConns : ConnectionSizes
+  ) : ConnectionSizes {
+    {
+      top = newTop,
+      right = newRight,
+      bottom = newBottom,
+      left = newLeft
     }
   } where {
-    curConns =
-      island.currentConnectionCounts
-
     newTop =
       if (neighbourDirection == Direction::Up) {
-        newConnectionSize
+        newConnectionSizeGetter(curConns.top)
       } else {
         curConns.top
       }
 
     newRight =
       if (neighbourDirection == Direction::Right) {
-        newConnectionSize
+        newConnectionSizeGetter(curConns.right)
       } else {
         curConns.right
       }
 
     newBottom =
       if (neighbourDirection == Direction::Down) {
-        newConnectionSize
+        newConnectionSizeGetter(curConns.bottom)
       } else {
         curConns.bottom
       }
 
     newLeft =
       if (neighbourDirection == Direction::Left) {
-        newConnectionSize
+        newConnectionSizeGetter(curConns.left)
       } else {
         curConns.left
       }
@@ -316,15 +344,8 @@ module Model {
           conn.idx1 == sortedIdx1 && conn.idx2 == sortedIdx2
         })
 
-    maybeConn =
-      case (foundConn) {
-        FirstRest::A first rest => first
-      }
-
-    restConns =
-      case (foundConn) {
-        FirstRest::A first rest => rest
-      }
+    {maybeConn, restConns} =
+      foundConn
 
     /* we need to check up local maximums for both islands */
     commonMaxNewConnectionsCount =
@@ -353,7 +374,7 @@ module Model {
                 orientation = connectionOrientation
               }
 
-            Pair::A(Array.push(newConnection, puzzle.connections.list), 1)
+            {Array.push(newConnection, puzzle.connections.list), 1}
           }
 
         Maybe::Just conn =>
@@ -376,19 +397,12 @@ module Model {
                 orientation = conn.orientation
               }
 
-            Pair::A(Array.push(newConnection, restConns), newConnSize)
+            {Array.push(newConnection, restConns), newConnSize}
           }
       }
 
-    newConnectionList =
-      case (newConnectionsWithNewConnectionSize) {
-        Pair::A list size => list
-      }
-
-    newConnectionSize =
-      case (newConnectionsWithNewConnectionSize) {
-        Pair::A list size => size
-      }
+    {newConnectionList, newConnectionSize} =
+      newConnectionsWithNewConnectionSize
 
     dir1to2 =
       directionFromIsland(puzzle.width, sortedIdx1, sortedIdx2)
@@ -472,14 +486,11 @@ module Model {
         currentIslands : Array(Island),
         leftIslands : Array(Island)
       ) : Array(Island) {
-        case (leftIslands[0]) {
-          Maybe::Nothing => currentIslands
+        case (leftIslands) {
+          [] => currentIslands
 
-          Maybe::Just island =>
+          [island, ...rest] =>
             try {
-              rest =
-                Array.drop(1, leftIslands)
-
               updatedIslands =
                 currentIslands
                 |> Util.Collection.updateFirst(
@@ -492,10 +503,11 @@ module Model {
       }
 
     islandsToUpdate =
-      Maybe.Extra.values([
-        newIsland1,
-        newIsland2
-      ])
+      Maybe.Extra.values(
+        [
+          newIsland1,
+          newIsland2
+        ])
 
     newIslandsList =
       updateEachIsland(puzzle.islands.list, islandsToUpdate)
@@ -526,12 +538,17 @@ module Model {
   fun findNeighbourIsland (
     puzzle : Puzzle,
     islandIndex : Number,
-    direction : Direction
+    direction : Direction,
+    shouldCheckCollisions : Bool
   ) : Maybe(Number) {
     getIslandByIndex(puzzle.islands, islandIndex)
     |> Maybe.Extra.andThen(
       (island : Island) : Maybe(Number) {
-        traverseToNextIsland(puzzle, islandIndex, direction)
+        traverseToNextIsland(
+          puzzle,
+          islandIndex,
+          direction,
+          shouldCheckCollisions)
       })
   }
 

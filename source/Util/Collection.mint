@@ -43,30 +43,23 @@ module Util.Collection {
   }
 
   /* Find an element and return it along with the rest of the input items. */
-  fun findAndGetRest (predicate : Function(a, Bool), items : Array(a)) : FirstRest(a) {
+  fun findAndGetRest (predicate : Function(a, Bool), items : Array(a)) : Tuple(Maybe(a), Array(a)) {
     iterate([], items)
   } where {
     iterate =
-      (checked : Array(a), unchecked : Array(a)) : FirstRest(a) {
-        case (unchecked[0]) {
-          Maybe::Nothing => FirstRest::A(Maybe::Nothing, [])
+      (checked : Array(a), unchecked : Array(a)) : Tuple(Maybe(a), Array(a)) {
+        try {
+          case (unchecked) {
+            [] => {Maybe::Nothing, checked}
 
-          Maybe::Just first =>
-            try {
-              rest =
-                Array.drop(1, unchecked)
-
+            [first, ...rest] =>
               if (predicate(first)) {
-                FirstRest::A(Maybe::Just(first), Array.append(Array.reverse(checked), rest))
+                {Maybe::Just(first), Array.append(Array.reverse(checked), rest)}
               } else {
                 iterate(Array.push(first, checked), rest)
               }
-            }
+          }
         }
       }
   }
-}
-
-enum FirstRest(a) {
-  A(Maybe(a), Array(a))
 }
