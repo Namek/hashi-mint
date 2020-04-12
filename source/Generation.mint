@@ -78,7 +78,7 @@ module Generation {
     }
   }
 
-  fun generatePuzzle (seed : Number, width : Number, height : Number) : Puzzle {
+  fun generatePuzzle (seed : Rand, width : Number, height : Number) : Puzzle {
     {
       islands =
         {
@@ -101,7 +101,7 @@ module Generation {
 
     /* TODO: generation params should depend on map size and difficulty level */
     {minIslandCount, maxRandomizationFailCount, chanceToPickExistingIsland} =
-      {12, 40, 40}
+      {12, 90, 40}
 
     genState0 =
       {
@@ -156,7 +156,7 @@ module Generation {
         })
   }
 
-  fun generateIslands (seed : Number, genState0 : GenerationState) : GenerationState {
+  fun generateIslands (seed : Rand, genState0 : GenerationState) : GenerationState {
     try {
       rand0 =
         Random.init(seed)

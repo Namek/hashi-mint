@@ -2,6 +2,6 @@ routes {
   / {
     /* Game.setPuzzle(Generation.puzzle1()) */
     Game.setPuzzle(
-      Debug.log(Generation.generatePuzzle(214123, 8, 8)))
+      Debug.log(Generation.generatePuzzle(Random.createSeed(), 8, 8)))
   }
 }

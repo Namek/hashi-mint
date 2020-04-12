@@ -310,7 +310,7 @@ component Main {
   fun testRandom {
     try {
       rand0 =
-        Random.init(213104)
+        Random.init(Random.createSeed())
 
       iter =
         (i : Number, rand : Rand, numbers : Array(Number)) {
@@ -329,7 +329,6 @@ component Main {
       iter(0, rand0, [])
       |> Array.map((num : Number) { Number.toString(num) })
       |> Array.intersperse(",")
-      |> Debug.log
     }
   }
 
@@ -339,7 +338,7 @@ component Main {
       onPointerUp={Game.gotDragShouldStop}>
 
       <div>
-        /* <{ testRandom() }> */
+        <{ testRandom() }>
         <{ Number.toString(fieldSize * scaleFactor) }>
         <{ Number.toString(puzzle.width) }>
 

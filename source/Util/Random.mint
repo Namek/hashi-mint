@@ -1,103 +1,163 @@
 /* state of randomization */
 record Rand {
-  a : Number,
-  b : Number,
-  c : Number,
-  d : Number
+  state : Number,
+  inc : Number
 }
 
+/* [Permuted Congruential Generators][http://www.pcg-random.org/] by M. E. O'Neil. */
 module Random {
-  /* const UINTMAX = `Number.MAX_SAFE_INTEGER` */
-  const UINTMAX = 4294967295
-
-  fun xorshift (seed : Number) : Number {
-    `
-    let x = seed[0], y = seed[1], z = seed[2], w = seed[3];
-    let t = x;
-    t = (t ^ (t << 11)) >>> 0;
-    t = (t ^ (t >>> 8)) >>> 0;
-    x = y; y = z; z = w;
-    w = (w ^ (w >>> 19)) >>> 0;
-    w = (w ^ t) >>> 0;
-    return w;
-    `
-  }
+  const MAX_INT = 2147483647
 
   fun createSeed : Rand {
-    `Date.now()`
+    try {
+      num1 =
+        `Math.floor(Math.random() * 100000)`
+
+      num2 =
+        `Math.floor(Math.random() * 100000)`
+
+      seed(num1, num2)
+    }
   }
 
-  fun init (seed : Number) : Rand {
+  fun seed (seedStateInitializer : Number, streamId : Number) : Rand {
+    {
+      state = seedStateInitializer,
+      /* ensure that streamId is odd */
+      inc = `Math.abs(#{streamId} % #{MAX_INT}) | 1`
+    }
+  }
+
+  fun seedFromString (str : String) : Rand {
+    seed(num1, num2)
+  } where {
+    num1 =
+      xmur3(str) % MAX_INT
+
+    num2 =
+      xmur3(str + str) % MAX_INT
+  }
+
+  fun xmur3 (str : String) : Number {
+    `(() => {
+      let str = #{str}
+      for (var i = 0, h = 1779033703 ^ str.length; i < str.length; i++)
+        h = Math.imul(h ^ str.charCodeAt(i), 3432918353),
+        h = h << 13 | h >>> 19;
+
+      h = Math.imul(h ^ h >>> 16, 2246822507);
+      h = Math.imul(h ^ h >>> 13, 3266489909);
+
+      return (h ^= h >>> 16) >>> 0;
+    })()
+    `
+  }
+
+  fun init (seed : Rand) : Rand {
     try {
-      x =
-        `#{seed} % #{UINTMAX}`
+      streamId =
+        seed.inc
 
-      y =
-        `#{seed} << #{seed} >>> 0 % #{UINTMAX}`
+      s0 =
+        {
+          state = 0,
+          inc = `(#{streamId} << 1) | 1`
+        }
 
-      z =
-        `#{y} * 11 % #{UINTMAX}`
+      {num0, s1} =
+        nextInt(s0)
 
-      w =
-        `#{x} * #{seed} % #{UINTMAX}`
+      s2 =
+        { s1 | state = s1.state + seed.state }
 
-      {
-        a = x,
-        b = y,
-        c = z,
-        d = w
-      }
+      {num1, s3} =
+        nextInt(s2)
+
+      s3
     }
   }
 
   fun nextInt (rand : Rand) : Tuple(Number, Rand) {
     {newValue, nextRand}
   } where {
-    t0 =
-      rand.d
+    oldState =
+      rand.state
 
-    t1 =
-      `#{t0} ^ (#{t0} << 13)`
+    oldInc =
+      rand.inc
 
-    t2 =
-      `#{t1} ^ (#{t1} >> 17)`
+    newState =
+      `(#{oldState} * 1664525 + #{oldInc}) >>> 0`
 
     newValue =
-      `(#{t2} ^ #{rand.a} ^ (#{rand.a} >> 5)) % #{UINTMAX}`
+      peel(rand)
 
     nextRand =
-      {
-        a = newValue,
-        b = rand.a,
-        c = rand.b,
-        d = rand.c
+      { rand | state = newState }
+  }
+
+  fun next (rand : Rand) : Rand {
+    try {
+      oldState =
+        rand.state
+
+      oldInc =
+        rand.inc
+
+      newState =
+        `(#{oldState} * 1664525 + #{oldInc}) >>> 0`
+
+      { rand | state = newState }
+    }
+  }
+
+  fun peel (rand : Rand) : Number {
+    try {
+      oldState =
+        rand.state
+
+      word =
+        `Math.imul(#{oldState} ^ (#{oldState} >>> ((#{oldState} >>> 28) + 4)), 277803737)`
+
+      `((#{word} >>> 22) % #{word}) >>> 0`
+    }
+  }
+
+  /* Restrict number 'r' to bound, where 0 <= r < bound */
+  fun bounded (bound : Number, rand : Rand) : Tuple(Number, Rand) {
+    iter(rand)
+  } where {
+    threshold =
+      `((-#{bound} >>> 0) % #{bound}) >>> 0`
+
+    /* (MAX_INT - bound) % bound */
+    iter =
+      (rand1 : Rand) : Tuple(Number, Rand) {
+        try {
+          {num, rand2} =
+            nextInt(rand1)
+
+          if (num >= threshold) {
+            {num % bound, rand2}
+          } else {
+            iter(rand2)
+          }
+        }
       }
   }
 
   fun number (min : Number, max : Number, rand : Rand) : Tuple(Number, Rand) {
-    {rounded1, rand1}
+    {val, rand1}
   } where {
-    {randomized, rand1} =
-      nextInt(rand)
-      |> Debug.log
+    range =
+      max - min
 
-    randomizedold =
-      `Math.random() ` * UINTMAX
+    {randomizedInt, rand1} =
+      rand
+      |> bounded(range + 1)
 
     val =
-      ((randomized / UINTMAX) * (max - min)) + min
-
-    rounded0 =
-      `Math.round(#{val})`
-
-    rounded1 =
-      if (rounded0 > max) {
-        max
-      } else if (rounded0 < min) {
-        min
-      } else {
-        rounded0
-      }
+      randomizedInt + min
   }
 
   fun index (values : Array(a), rand : Rand) : Tuple(Number, Rand) {
