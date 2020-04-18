@@ -352,19 +352,24 @@ module Generation {
             {x1 + diff.x, y1 + diff.y}
 
           fillNext =
-            (x : Number, y : Number, genState : GenerationState) : GenerationState {
+            (x : Number, y : Number, genState1 : GenerationState) : GenerationState {
               try {
                 idx =
-                  Model.xyIdx(genState.width, x, y)
+                  Model.xyIdx(genState1.width, x, y)
 
                 if (idx != idx2) {
-                  { genState |
-                    fieldsMap =
-                      genState.fieldsMap
-                      |> Map.set(idx, FieldType::Connection)
+                  try {
+                    genState2 =
+                      { genState1 |
+                        fieldsMap =
+                          genState1.fieldsMap
+                          |> Map.set(idx, FieldType::Connection)
+                      }
+
+                    fillNext(x + diff.x, y + diff.y, genState2)
                   }
                 } else {
-                  genState
+                  genState1
                 }
               }
             }
