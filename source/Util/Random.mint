@@ -8,55 +8,20 @@ record Rand {
 module Random {
   const MAX_INT = 2147483647
 
-  fun createSeed : Rand {
+  fun initRandomly : Rand {
     try {
-      num1 =
+      num =
         `Math.floor(Math.random() * 100000)`
 
-      num2 =
-        `Math.floor(Math.random() * 100000)`
-
-      seed(num1, num2)
+      init(num)
     }
   }
 
-  fun seed (seedStateInitializer : Number, streamId : Number) : Rand {
-    {
-      state = seedStateInitializer,
-      /* ensure that streamId is odd */
-      inc = `Math.abs(#{streamId} % #{MAX_INT}) | 1`
-    }
-  }
-
-  fun seedFromString (str : String) : Rand {
-    seed(num1, num2)
-  } where {
-    num1 =
-      xmur3(str) % MAX_INT
-
-    num2 =
-      xmur3(str + str) % MAX_INT
-  }
-
-  fun xmur3 (str : String) : Number {
-    `(() => {
-      let str = #{str}
-      for (var i = 0, h = 1779033703 ^ str.length; i < str.length; i++)
-        h = Math.imul(h ^ str.charCodeAt(i), 3432918353),
-        h = h << 13 | h >>> 19;
-
-      h = Math.imul(h ^ h >>> 16, 2246822507);
-      h = Math.imul(h ^ h >>> 13, 3266489909);
-
-      return (h ^= h >>> 16) >>> 0;
-    })()
-    `
-  }
-
-  fun init (seed : Rand) : Rand {
+  fun init (seedStateInitializer : Number) : Rand {
     try {
+      /* taken from Numerical Recipes */
       streamId =
-        seed.inc
+        1013904223
 
       s0 =
         {
@@ -68,7 +33,7 @@ module Random {
         nextInt(s0)
 
       s2 =
-        { s1 | state = s1.state + seed.state }
+        { s1 | state = s1.state + seedStateInitializer }
 
       {num1, s3} =
         nextInt(s2)

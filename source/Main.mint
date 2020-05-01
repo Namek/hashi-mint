@@ -27,15 +27,15 @@ store Game {
     maxConnectionCount = 2
   }
 
-  state seed : Rand = Random.createSeed()
+  state seed : Rand = Random.initRandomly()
   state puzzleStart : Puzzle = puzzle
   state isPuzzleDone : Bool = false
   state moveHistory : Array(IndexPair) = []
   state islandDrag : IslandDrag = IslandDrag::NoIslandsHovered
 
-  fun initPuzzle (seed : Rand, width : Number, height : Number) {
+  fun initPuzzle (seed : Number, width : Number, height : Number) {
     try {
-      next { seed = seed }
+      next { seed = Random.init(seed) }
 
       setPuzzle(Generation.generatePuzzle(seed, width, height))
     }
@@ -319,7 +319,7 @@ component Main {
   fun testRandom {
     try {
       rand0 =
-        Random.init(Random.createSeed())
+        Random.initRandomly()
 
       iter =
         (i : Number, rand : Rand, numbers : Array(Number)) {

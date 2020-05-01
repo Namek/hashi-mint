@@ -73,7 +73,7 @@ module Generation {
     }
   }
 
-  fun generatePuzzle (seed : Rand, width : Number, height : Number) : Puzzle {
+  fun generatePuzzle (seed : Number, width : Number, height : Number) : Puzzle {
     {
       islands =
         {
@@ -151,7 +151,7 @@ module Generation {
         })
   }
 
-  fun generateIslands (seed : Rand, genState0 : GenerationState) : GenerationState {
+  fun generateIslands (seed : Number, genState0 : GenerationState) : GenerationState {
     try {
       rand0 =
         Random.init(seed)
