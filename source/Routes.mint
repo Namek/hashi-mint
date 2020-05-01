@@ -1,7 +1,10 @@
 routes {
   / {
-    /* Game.setPuzzle(Generation.puzzle1()) */
-    Game.setPuzzle(
-      Debug.log(Generation.generatePuzzle(Random.createSeed(), 8, 8)))
+    try {
+      seed =
+        Random.seed(412321, 213210)
+
+      Game.initPuzzle(seed, 8, 8)
+    }
   }
 }

@@ -16,7 +16,7 @@ module Util.Render {
 
       <text
         x={Number.toString(posX)}
-        y={Number.toString(posY + 2)}
+        y={Number.toString(posY + 1.5)}
         textAnchor="middle"
         dominantBaseline="central"
         fontSize="#{Const.circleRadius}pt">

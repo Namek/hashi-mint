@@ -4,7 +4,7 @@ store Const {
   state margin : Number = 2
 
   /* fieldSize / 2 */
-  state circleRadius : Number = 5
+  state circleRadius : Number = 4
 
   state connectionLineMargin : Number = 3
 }
@@ -27,10 +27,19 @@ store Game {
     maxConnectionCount = 2
   }
 
+  state seed : Rand = Random.createSeed()
   state puzzleStart : Puzzle = puzzle
   state isPuzzleDone : Bool = false
   state moveHistory : Array(IndexPair) = []
   state islandDrag : IslandDrag = IslandDrag::NoIslandsHovered
+
+  fun initPuzzle (seed : Rand, width : Number, height : Number) {
+    try {
+      next { seed = seed }
+
+      setPuzzle(Generation.generatePuzzle(seed, width, height))
+    }
+  }
 
   fun setPuzzle (p : Puzzle) : Promise(Never, Void) {
     next
@@ -338,9 +347,16 @@ component Main {
       onPointerUp={Game.gotDragShouldStop}>
 
       <div>
-        <{ testRandom() }>
+        "seed:"
+        <{ Number.toString(Game.seed.state) }>
+
+        /*
+        "randoms:"
+                <{ testRandom() }>
+        */
         <{ Number.toString(fieldSize * scaleFactor) }>
         <{ Number.toString(puzzle.width) }>
+        <br/>
 
         <button
           onClick={Game.stepBack}
