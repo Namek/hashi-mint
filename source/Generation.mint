@@ -385,6 +385,35 @@ module Generation {
           rand0)
       }
 
+    emptyDirsFromIsland =
+      (genState : GenerationState, idx : Number) {
+        try {
+          conns =
+            getIslandConnectionSizes(genState, idx)
+
+          dirs =
+            conns
+            |> Maybe.map(
+              (conns : ConnectionSizes) : Array(Direction) {
+                for (dir of DIRECTIONS) {
+                  dir
+                } when {
+                  /* !hasNeighbour(idx0, dir, genState.islands) */
+                  try {
+                    connectionSize =
+                      Model.directionToConnectionSize(conns, dir)
+
+                    (connectionSize == 0)
+                  }
+                }
+              })
+            |> Maybe.withDefault([])
+
+          dirs
+        }
+      }
+
+    /* @optimize: remove this function and cache left connections to islands? */
     filterIslandsWhichCanHaveNewNeighbours =
       (genState : GenerationState) : Array(Number) {
         try {
@@ -392,26 +421,8 @@ module Generation {
             idx
           } when {
             try {
-              conns =
-                getIslandConnectionSizes(genState, idx)
-
               dirs =
-                conns
-                |> Maybe.map(
-                  (conns : ConnectionSizes) : Array(Direction) {
-                    for (dir of DIRECTIONS) {
-                      dir
-                    } when {
-                      /* !hasNeighbour(idx0, dir, genState.islands) */
-                      try {
-                        connectionSize =
-                          Model.directionToConnectionSize(conns, dir)
-
-                        (connectionSize == 0)
-                      }
-                    }
-                  })
-                |> Maybe.withDefault([])
+                emptyDirsFromIsland(genState, idx)
 
               Array.size(dirs) > 0
             }
@@ -440,6 +451,49 @@ module Generation {
           generatedIslandCount =
             Array.size(genState.islandIndices)
 
+          pickExistingIslandFirst =
+            (rand1 : Rand) : Tuple(GenerationState, Rand) {
+              try {
+                {idx, rand2} =
+                  Random.choice(genState.islandIndices, rand1)
+
+                curIslandConnectionSizes =
+                  getIslandConnectionSizes(genState, idx)
+
+                dirs =
+                  curIslandConnectionSizes
+                  |> Maybe.map(
+                    (conns : ConnectionSizes) : Array(Direction) {
+                      for (dir of DIRECTIONS) {
+                        dir
+                      } when {
+                        try {
+                          currentConnectionSize =
+                            Model.directionToConnectionSize(conns, dir)
+
+                          (currentConnectionSize > 0 && currentConnectionSize < genState.maxConnectionCount)
+                        }
+                      }
+                    })
+                  |> Maybe.withDefault([])
+
+                case (dirs) {
+                  [dir, ...restDirs] =>
+                    try {
+                      {randomDir, rand3} =
+                        Random.choiceSafe(dir, restDirs, rand2)
+
+                      genState1 =
+                        increaseConnectionToDirection(idx, randomDir, genState)
+
+                      iter(genState1, idx, rand3)
+                    }
+
+                  => iterFail(genState, idx, rand2)
+                }
+              }
+            }
+
           if (genState.randomizationFailCount >= genState.maxRandomizationFailCount) {
             {genState, rand0}
           } else {
@@ -459,73 +513,15 @@ module Generation {
                   }
                 }
 
-              /*
-              TODO: this should not be if/else but a rail.
-                    if we can not choose an existing connection then we create a new island.
-                    if that fails then there is iteration fail.
-              */
               if (shouldTryToPickExistingIslandFirst) {
-                try {
-                  {idx, rand2} =
-                    Random.choice(genState.islandIndices, rand1)
-
-                  curIslandConnectionSizes =
-                    getIslandConnectionSizes(genState, idx)
-
-                  dirs =
-                    curIslandConnectionSizes
-                    |> Maybe.map(
-                      (conns : ConnectionSizes) : Array(Direction) {
-                        for (dir of DIRECTIONS) {
-                          dir
-                        } when {
-                          try {
-                            currentConnectionSize =
-                              Model.directionToConnectionSize(conns, dir)
-
-                            (currentConnectionSize > 0 && currentConnectionSize < genState.maxConnectionCount)
-                          }
-                        }
-                      })
-                    |> Maybe.withDefault([])
-
-                  case (dirs) {
-                    [dir, ...restDirs] =>
-                      try {
-                        {randomDir, rand3} =
-                          Random.choiceSafe(dir, restDirs, rand2)
-
-                        genState1 =
-                          increaseConnectionToDirection(idx, randomDir, genState)
-
-                        iter(genState1, idx, rand3)
-                      }
-
-                    => iterFail(genState, idx, rand2)
-                  }
-                }
+                pickExistingIslandFirst(rand1)
               } else {
                 try {
                   curIslandConnectionSizes =
                     getIslandConnectionSizes(genState, idx0)
 
                   possibleDirections =
-                    curIslandConnectionSizes
-                    |> Maybe.map(
-                      (conns : ConnectionSizes) : Array(Direction) {
-                        for (dir of DIRECTIONS) {
-                          dir
-                        } when {
-                          /* !hasNeighbour(idx0, dir, genState.islands) */
-                          try {
-                            connectionSize =
-                              Model.directionToConnectionSize(conns, dir)
-
-                            (connectionSize == 0)
-                          }
-                        }
-                      })
-                    |> Maybe.withDefault([])
+                    emptyDirsFromIsland(genState, idx0)
 
                   if (Array.size(possibleDirections) > 0) {
                     try {
