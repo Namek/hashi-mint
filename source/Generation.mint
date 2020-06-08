@@ -35,9 +35,8 @@ record GenerationState {
   fieldsMap : Map(Number, FieldType),
   islandIndices : Array(Number),
   connectionsMaxList : Array(Connection),
-  minIslandCount : Number,
-  randomizationFailCount : Number,
-  maxRandomizationFailCount : Number,
+  targetIslandCount : Number,
+  totalConnectionCount : Number,
   iterCallCount : Number,
   /* range: 0 - 100 */
   chanceToPickExistingIsland : Number
@@ -95,8 +94,8 @@ module Generation {
       2
 
     /* TODO: generation params should depend on map size and difficulty level */
-    {minIslandCount, maxRandomizationFailCount, chanceToPickExistingIsland} =
-      {12, 30, 40}
+    {targetIslandCount, chanceToPickExistingIsland} =
+      {10, 40}
 
     genState0 =
       {
@@ -106,9 +105,8 @@ module Generation {
         fieldsMap = Map.empty(),
         islandIndices = [],
         connectionsMaxList = [],
-        minIslandCount = minIslandCount,
-        randomizationFailCount = 0,
-        maxRandomizationFailCount = maxRandomizationFailCount,
+        targetIslandCount = targetIslandCount,
+        totalConnectionCount = 0,
         iterCallCount = 0,
         chanceToPickExistingIsland = chanceToPickExistingIsland
       }
@@ -176,10 +174,31 @@ module Generation {
       genState1 =
         addIsland(firstIslandX, firstIslandY, genState0)
 
-      {genState2, rand2} =
-        iter(genState1, firstIslandIdx, rand1)
+      /*
+      Algorithm:
+      0. input parameter: targetIslandCount; one island already exists
+      1. generate islands. Do it until islandCount < targetIslandCount OR there is a failure
+      1.1. pick (randomly) an existing island that can have new neighbours
+      1.1.1. if it can't then cross out this one and pick another existing island
+      1.2. try to create a neighbour
+      1.3. go to 3 if no existing island can be picked anymore
+      2. create cycles. Do it {alfa}*targetIslandCount times
+      2.1. find a pair of non-connected islands and make a connection
+      3. increase connection counts. Got through all connections
+        until 1/3 of island count is done or a failure appears.
+      3.1. pick (randomly) an existing island that can increase existing connections
+      3.2. increase picked connection
+      */
+      {state2, rand2} =
+        generateIslandsOnly(genState1, rand1)
 
-      genState2
+      {state3, rand3} =
+        createCycles(state2, rand2)
+
+      {state4, rand4} =
+        increaseConnectionCounts(state3, rand3)
+
+      state4
     }
   } where {
     randomizePosition =
@@ -321,7 +340,8 @@ module Generation {
               genState.fieldsMap
               |> Map.set(idx1, FieldType::Island(idx1, newConns1))
               |> Map.set(idx2, FieldType::Island(idx2, newConns2)),
-            connectionsMaxList = Array.push(newConnection, restConns)
+            connectionsMaxList = Array.push(newConnection, restConns),
+            totalConnectionCount = genState.totalConnectionCount + 1
           }
           |> fillConnectionBetween(idx1, idx2)
         }
@@ -373,20 +393,9 @@ module Generation {
         }
       }
 
-    iterFail =
-      (
-        genState0 : GenerationState,
-        idx0 : Number,
-        rand0 : Rand
-      ) : Tuple(GenerationState, Rand) {
-        iter(
-          { genState0 | randomizationFailCount = genState0.randomizationFailCount + 1 },
-          idx0,
-          rand0)
-      }
-
+    /* returns directions with max distances (but minimum 2) */
     emptyDirsFromIsland =
-      (genState : GenerationState, idx : Number) {
+      (genState : GenerationState, idx : Number) : Array(Tuple(Direction, Number)) {
         try {
           conns =
             getIslandConnectionSizes(genState, idx)
@@ -394,18 +403,39 @@ module Generation {
           dirs =
             conns
             |> Maybe.map(
-              (conns : ConnectionSizes) : Array(Direction) {
-                for (dir of DIRECTIONS) {
-                  dir
-                } when {
-                  /* !hasNeighbour(idx0, dir, genState.islands) */
-                  try {
-                    connectionSize =
-                      Model.directionToConnectionSize(conns, dir)
+              (conns : ConnectionSizes) : Array(Tuple(Direction, Number)) {
+                DIRECTIONS
+                |> Array.select(
+                  (dir : Direction) { Model.directionToConnectionSize(conns, dir) == 0 })
+                |> Array.reduce(
+                  [],
+                  (
+                    acc : Array(Tuple(Direction, Number)),
+                    dir : Direction
+                  ) {
+                    try {
+                      {furthestIndex, isIslandIndex, atDistance} =
+                        traverse(genState, idx, dir, true)
 
-                    (connectionSize == 0)
-                  }
-                }
+                      maxDistance =
+                        furthestIndex
+                        |> Maybe.map(
+                          (idx : Number) {
+                            if (isIslandIndex) {
+                              atDistance - 1
+                            } else {
+                              atDistance
+                            }
+                          })
+                        |> Maybe.withDefault(0)
+
+                      if (maxDistance >= 2) {
+                        Array.push({dir, maxDistance}, acc)
+                      } else {
+                        acc
+                      }
+                    }
+                  })
               })
             |> Maybe.withDefault([])
 
@@ -430,7 +460,79 @@ module Generation {
         }
       }
 
-    iter =
+    generateIslandsOnly =
+      (state0 : GenerationState, rand0 : Rand) : Tuple(GenerationState, Rand) {
+        if (Array.size(state0.islandIndices) >= state0.targetIslandCount) {
+          {state0, rand0}
+        } else {
+          try {
+            filteredIslandsIdxs =
+              filterIslandsWhichCanHaveNewNeighbours(state0)
+
+            {maybeIdx0, rand1} =
+              Random.choiceMaybe(filteredIslandsIdxs, rand0)
+
+            case (maybeIdx0) {
+              Maybe::Nothing => {state0, rand1}
+
+              Maybe::Just idx0 =>
+                try {
+                  curIslandConnectionSizes =
+                    getIslandConnectionSizes(state0, idx0)
+
+                  possibleDirections =
+                    emptyDirsFromIsland(state0, idx0)
+
+                  if (Array.size(possibleDirections) > 0) {
+                    try {
+                      {d, rand2} =
+                        Random.choice(possibleDirections, rand1)
+
+                      {newDirection, maxDistance} =
+                        d
+
+                      {distance, rand3} =
+                        Random.number(2, maxDistance, rand2)
+
+                      targetIndex =
+                        movePosition(state0.width, idx0, newDirection, distance)
+
+                      {newX, newY} =
+                        Model.idxXY(state0.width, targetIndex)
+
+                      state1 =
+                        addIsland(newX, newY, state0)
+
+                      state2 =
+                        increaseConnection(idx0, targetIndex, state1)
+
+                      generateIslandsOnly(state2, rand3)
+                    }
+                  } else {
+                    {state0, rand1}
+                  }
+                }
+            }
+          }
+        }
+      }
+
+    createCycles =
+      (state0 : GenerationState, rand0 : Rand) : Tuple(GenerationState, Rand) {
+        try {
+          {state0, rand0}
+        }
+      }
+
+    increaseConnectionCounts =
+      (state0 : GenerationState, rand0 : Rand) : Tuple(GenerationState, Rand) {
+        try {
+          {state0, rand0}
+        }
+      }
+
+    /* TODO to be removed after interesting pieces are moved out of it */
+    iter2 =
       (
         genStateInitial : GenerationState,
         idxPrevious : Number,
@@ -451,7 +553,7 @@ module Generation {
           generatedIslandCount =
             Array.size(genState.islandIndices)
 
-          pickExistingIslandFirst =
+          increaseConnectionFromExistingIslandIfPossible =
             (rand1 : Rand) : Tuple(GenerationState, Rand) {
               try {
                 {idx, rand2} =
@@ -486,92 +588,34 @@ module Generation {
                       genState1 =
                         increaseConnectionToDirection(idx, randomDir, genState)
 
-                      iter(genState1, idx, rand3)
+                      iter2(genState1, idx, rand3)
                     }
 
-                  => iterFail(genState, idx, rand2)
+                  => iter2(genState, idx, rand2)
                 }
               }
             }
 
-          if (genState.randomizationFailCount >= genState.maxRandomizationFailCount) {
-            {genState, rand0}
-          } else {
-            try {
-              {shouldTryToPickExistingIslandFirst, rand1} =
-                if (generatedIslandCount < genState.minIslandCount) {
-                  {false, rand0}
-                } else {
-                  try {
-                    {num, rand1} =
-                      Random.number(0, 100, rand0)
-
-                    bool =
-                      num <= genState.chanceToPickExistingIsland
-
-                    {bool, rand1}
-                  }
-                }
-
-              if (shouldTryToPickExistingIslandFirst) {
-                pickExistingIslandFirst(rand1)
+          try {
+            {shouldTryToPickExistingIslandFirst, rand1} =
+              if (genState.totalConnectionCount < genState.targetIslandCount) {
+                {false, rand0}
               } else {
                 try {
-                  curIslandConnectionSizes =
-                    getIslandConnectionSizes(genState, idx0)
+                  {num, rand1} =
+                    Random.number(0, 100, rand0)
 
-                  possibleDirections =
-                    emptyDirsFromIsland(genState, idx0)
+                  bool =
+                    num <= genState.chanceToPickExistingIsland
 
-                  if (Array.size(possibleDirections) > 0) {
-                    try {
-                      {newDirection, rand2} =
-                        Random.choice(possibleDirections, rand1)
-
-                      {furthestIndex, isIslandIndex, atDistance} =
-                        traverse(genState, idx0, newDirection, true)
-
-                      maxDistance =
-                        if (isIslandIndex) {
-                          atDistance - 1
-                        } else {
-                          atDistance
-                        }
-
-                      case (furthestIndex) {
-                        Maybe::Just furthestIndex =>
-                          if (maxDistance >= 2) {
-                            try {
-                              {distance, rand3} =
-                                Random.number(2, maxDistance, rand2)
-
-                              targetIndex =
-                                movePosition(genState.width, idx0, newDirection, distance)
-
-                              {newX, newY} =
-                                Model.idxXY(genState.width, targetIndex)
-
-                              genState1 =
-                                addIsland(newX, newY, genState)
-
-                              genState2 =
-                                increaseConnection(idx0, targetIndex, genState1)
-
-                              iter(genState2, targetIndex, rand3)
-                            }
-                          } else {
-                            /* should never happen */
-                            iterFail(genState, idx0, rand2)
-                          }
-
-                        Maybe::Nothing => iterFail(genState, idx0, rand2)
-                      }
-                    }
-                  } else {
-                    iterFail(genState, idx0, rand1)
-                  }
+                  {bool, rand1}
                 }
               }
+
+            if (shouldTryToPickExistingIslandFirst) {
+              increaseConnectionFromExistingIslandIfPossible(rand1)
+            } else {
+              {genStateInitial, randInitial}
             }
           }
         }

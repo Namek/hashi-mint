@@ -147,6 +147,19 @@ module Random {
       `#{values}[#{idx}]`
   }
 
+  fun choiceMaybe (values : Array(a), rand : Rand) : Tuple(Maybe(a), Rand) {
+    if (Array.size(values) == 0) {
+      {Maybe::Nothing, rand}
+    } else {
+      try {
+        {pick, rand1} =
+          choice(values, rand)
+
+        {Maybe::Just(pick), rand1}
+      }
+    }
+  }
+
   fun choiceOrDefault (defaultValue : a, values : Array(a), rand : Rand) : Tuple(a, Rand) {
     case (values) {
       [] => {defaultValue, rand}
