@@ -310,6 +310,7 @@ component Main {
     width: 100vw;
     height: 100vh;
     margin: 0;
+    background-color: #ccc;
 
     svg {
       user-select: none;

@@ -36,10 +36,11 @@ record GenerationState {
   islandIndices : Array(Number),
   connectionsMaxList : Array(Connection),
   targetIslandCount : Number,
-  totalConnectionCount : Number,
-  iterCallCount : Number,
   /* range: 0 - 100 */
-  chanceToPickExistingIsland : Number
+  cycleImprovementPercent : Number,
+  /* range: 0 - 100 */
+  increaseConnectionCountsPercent : Number,
+  totalConnectionCount : Number
 }
 
 module Generation {
@@ -94,8 +95,8 @@ module Generation {
       2
 
     /* TODO: generation params should depend on map size and difficulty level */
-    {targetIslandCount, chanceToPickExistingIsland} =
-      {10, 40}
+    {targetIslandCount, cycleImprovementPercent, increaseConnectionCountsPercent} =
+      {10, 15, 50}
 
     genState0 =
       {
@@ -106,9 +107,9 @@ module Generation {
         islandIndices = [],
         connectionsMaxList = [],
         targetIslandCount = targetIslandCount,
-        totalConnectionCount = 0,
-        iterCallCount = 0,
-        chanceToPickExistingIsland = chanceToPickExistingIsland
+        cycleImprovementPercent = cycleImprovementPercent,
+        increaseConnectionCountsPercent = increaseConnectionCountsPercent,
+        totalConnectionCount = 0
       }
 
     genState1 =
@@ -182,7 +183,7 @@ module Generation {
       1.1.1. if it can't then cross out this one and pick another existing island
       1.2. try to create a neighbour
       1.3. go to 3 if no existing island can be picked anymore
-      2. create cycles. Do it {alfa}*targetIslandCount times
+      2. create cycles. Do it cycleImprovementPercent*targetIslandCount times
       2.1. find a pair of non-connected islands and make a connection
       3. increase connection counts. Got through all connections
         until 1/3 of island count is done or a failure appears.
@@ -445,19 +446,28 @@ module Generation {
 
     /* @optimize: remove this function and cache left connections to islands? */
     filterIslandsWhichCanHaveNewNeighbours =
-      (genState : GenerationState) : Array(Number) {
-        try {
-          for (idx of genState.islandIndices) {
-            idx
-          } when {
+      (genState : GenerationState) {
+        genState.islandIndices
+        |> Array.reduce(
+          {[], Map.empty()},
+          (
+            acc : Tuple(Array(Number), Map(Number, Array(Tuple(Direction, Number)))),
+            idx : Number
+          ) {
             try {
+              {accIndices, accDirsMap} =
+                acc
+
               dirs =
                 emptyDirsFromIsland(genState, idx)
 
-              Array.size(dirs) > 0
+              if (Array.size(dirs) > 0) {
+                {Array.push(idx, accIndices), Map.set(idx, dirs, accDirsMap)}
+              } else {
+                acc
+              }
             }
-          }
-        }
+          })
       }
 
     generateIslandsOnly =
@@ -466,7 +476,7 @@ module Generation {
           {state0, rand0}
         } else {
           try {
-            filteredIslandsIdxs =
+            {filteredIslandsIdxs, idxToDirsWithDistance} =
               filterIslandsWhichCanHaveNewNeighbours(state0)
 
             {maybeIdx0, rand1} =
@@ -520,6 +530,19 @@ module Generation {
     createCycles =
       (state0 : GenerationState, rand0 : Rand) : Tuple(GenerationState, Rand) {
         try {
+          /* TODO filter the list to islands with directions that can join to a existing neighbours */
+          {filteredIslandsIdxs, idxToDirsWithDistance} =
+            filterIslandsWhichCanHaveNewNeighbours(state0)
+
+          /* TODO scale down this chance because it is not alfa*n but much higher due to len(filteredIslandsIdxs) << n */
+          chance =
+            state0.cycleImprovementPercent
+
+          chosenIslandsIdxs =
+            filteredIslandsIdxs
+            |> Random.filterByChance(chance, rand0)
+
+          /* TODO make new connections for the chosen indices+dirs */
           {state0, rand0}
         }
       }
@@ -531,92 +554,45 @@ module Generation {
         }
       }
 
-    /* TODO to be removed after interesting pieces are moved out of it */
-    iter2 =
-      (
-        genStateInitial : GenerationState,
-        idxPrevious : Number,
-        randInitial : Rand
-      ) : Tuple(GenerationState, Rand) {
+    increaseConnectionFromExistingIslandIfPossible =
+      (genState : GenerationState, rand1 : Rand) : Tuple(GenerationState, Rand) {
         try {
-          genState =
-            { genStateInitial | iterCallCount = genStateInitial.iterCallCount + 1 }
+          {idx, rand2} =
+            Random.choice(genState.islandIndices, rand1)
 
-          l =
-            log("ITER STEP -> ", genState)
+          curIslandConnectionSizes =
+            getIslandConnectionSizes(genState, idx)
 
-          {idx0, rand0} =
-            Random.choice(
-              filterIslandsWhichCanHaveNewNeighbours(genState),
-              randInitial)
+          dirs =
+            curIslandConnectionSizes
+            |> Maybe.map(
+              (conns : ConnectionSizes) : Array(Direction) {
+                for (dir of DIRECTIONS) {
+                  dir
+                } when {
+                  try {
+                    currentConnectionSize =
+                      Model.directionToConnectionSize(conns, dir)
 
-          generatedIslandCount =
-            Array.size(genState.islandIndices)
+                    (currentConnectionSize > 0 && currentConnectionSize < genState.maxConnectionCount)
+                  }
+                }
+              })
+            |> Maybe.withDefault([])
 
-          increaseConnectionFromExistingIslandIfPossible =
-            (rand1 : Rand) : Tuple(GenerationState, Rand) {
+          case (dirs) {
+            [dir, ...restDirs] =>
               try {
-                {idx, rand2} =
-                  Random.choice(genState.islandIndices, rand1)
+                {randomDir, rand3} =
+                  Random.choiceSafe(dir, restDirs, rand2)
 
-                curIslandConnectionSizes =
-                  getIslandConnectionSizes(genState, idx)
+                genState1 =
+                  increaseConnectionToDirection(idx, randomDir, genState)
 
-                dirs =
-                  curIslandConnectionSizes
-                  |> Maybe.map(
-                    (conns : ConnectionSizes) : Array(Direction) {
-                      for (dir of DIRECTIONS) {
-                        dir
-                      } when {
-                        try {
-                          currentConnectionSize =
-                            Model.directionToConnectionSize(conns, dir)
-
-                          (currentConnectionSize > 0 && currentConnectionSize < genState.maxConnectionCount)
-                        }
-                      }
-                    })
-                  |> Maybe.withDefault([])
-
-                case (dirs) {
-                  [dir, ...restDirs] =>
-                    try {
-                      {randomDir, rand3} =
-                        Random.choiceSafe(dir, restDirs, rand2)
-
-                      genState1 =
-                        increaseConnectionToDirection(idx, randomDir, genState)
-
-                      iter2(genState1, idx, rand3)
-                    }
-
-                  => iter2(genState, idx, rand2)
-                }
-              }
-            }
-
-          try {
-            {shouldTryToPickExistingIslandFirst, rand1} =
-              if (genState.totalConnectionCount < genState.targetIslandCount) {
-                {false, rand0}
-              } else {
-                try {
-                  {num, rand1} =
-                    Random.number(0, 100, rand0)
-
-                  bool =
-                    num <= genState.chanceToPickExistingIsland
-
-                  {bool, rand1}
-                }
+                {genState1, rand3}
               }
 
-            if (shouldTryToPickExistingIslandFirst) {
-              increaseConnectionFromExistingIslandIfPossible(rand1)
-            } else {
-              {genStateInitial, randInitial}
-            }
+            => {genState, rand2}
           }
         }
       }

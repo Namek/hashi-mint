@@ -188,4 +188,41 @@ module Random {
     restEls =
       Array.deleteAt(idx, values)
   }
+
+  /* True/false answer by percent in range from 0 to 100. */
+  fun chance (percent : Number, rand : Rand) : Tuple(Bool, Rand) {
+    try {
+      {num, rand1} =
+        number(0, 100, rand)
+
+      bool =
+        num <= percent
+
+      {bool, rand1}
+    }
+  }
+
+  fun filterByChance (chance : Number, rand0 : Rand, els : Array(a)) : Tuple(Array(a), Rand) {
+    els
+    |> Array.reduce(
+      {[], rand0},
+      (acc : Tuple(Array(Number), Rand), idx : Number) {
+        try {
+          {arr, rand1} =
+            acc
+
+          {accept, rand2} =
+            Random.chance(chance, rand1)
+
+          newArr =
+            if (accept) {
+              Array.push(idx, arr)
+            } else {
+              arr
+            }
+
+          {newArr, rand2}
+        }
+      })
+  }
 }
