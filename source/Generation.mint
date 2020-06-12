@@ -1,48 +1,3 @@
-record Bridge {
-  connectionCount : Number,
-  orientation : Orientation,
-  idx1 : Number,
-  idx2 : Number
-}
-
-record Rect {
-  x : Number,
-  y : Number,
-  width : Number,
-  height : Number
-}
-
-record Segment {
-  x : Number,
-  y : Number,
-  orientation : Orientation,
-  length : Number
-}
-
-record DivisionStats {
-  smallerThan2 : Number
-}
-
-enum FieldType {
-  Island(Number, ConnectionSizes)
-  Connection
-}
-
-record GenerationState {
-  width : Number,
-  height : Number,
-  maxConnectionCount : Number,
-  fieldsMap : Map(Number, FieldType),
-  islandIndices : Array(Number),
-  connectionsMaxList : Array(Connection),
-  targetIslandCount : Number,
-  /* range: 0 - 100 */
-  cycleImprovementPercent : Number,
-  /* range: 0 - 100 */
-  increaseConnectionCountsPercent : Number,
-  totalConnectionCount : Number
-}
-
 module Generation {
   const DIRECTIONS = [
     Direction::Right,
@@ -55,6 +10,31 @@ module Generation {
     try {
       log =
         `console.log(#{text}, #{value})`
+
+      value
+    }
+  }
+
+  fun watch (text : String, tap : Function(a, b), value : a) : a {
+    try {
+      l =
+        log(text, tap(value))
+
+      value
+    }
+  }
+
+  fun logIf (text : String, tap : Function(a, Maybe(b)), value : a) : a {
+    try {
+      t0 =
+        tap(value)
+
+      t1 =
+        case (t0) {
+          Maybe::Just val => log(text, val)
+
+          => Maybe::Nothing
+        }
 
       value
     }
@@ -96,7 +76,7 @@ module Generation {
 
     /* TODO: generation params should depend on map size and difficulty level */
     {targetIslandCount, cycleImprovementPercent, increaseConnectionCountsPercent} =
-      {10, 15, 50}
+      {12, 70, 80}
 
     genState0 =
       {
@@ -249,20 +229,22 @@ module Generation {
           l0 =
             log("increaseConnectionToDirection", "start")
 
-          {idx2, isIslandIndex, distance} =
-            traverse(genState, idx, direction, false)
+          res =
+            traverse(genState, idx, direction, true)
 
           l =
             log(
               "increaseConnectionToDirection ->",
-              `{
-                idx: #{idx},
-                direction: #{direction},
-                idx2: #{idx2}
-              }`)
+              `#{res}`)
 
-          case (idx2) {
-            Maybe::Just idx2 => increaseConnection(idx, idx2, genState)
+          case (res.furthestLocationIndex) {
+            Maybe::Just idx2 =>
+              if (res.isIslandIndex) {
+                increaseConnection(idx, idx2, genState)
+              } else {
+                genState
+              }
+
             => genState
           }
         }
@@ -394,6 +376,88 @@ module Generation {
         }
       }
 
+    filterIslandsWhichCanIncreaseOrCreateConnectionToNeighbour =
+      (state0 : GenerationState) : Array(Bridge) {
+        state0.islandIndices
+        |> Array.reduce(
+          [],
+          (acc : Array(Bridge), idx : Number) {
+            try {
+              islandBridges =
+                getIslandConnectionSizes(state0, idx)
+                |> Maybe.map(
+                  (conns : ConnectionSizes) : Array(Bridge) {
+                    DIRECTIONS
+                    |> Array.map(
+                      (dir : Direction) {
+                        try {
+                          connSize =
+                            Model.directionToConnectionSize(conns, dir)
+
+                          orientation =
+                            Model.directionToOrientation(dir)
+
+                          if (connSize < state0.maxConnectionCount) {
+                            try {
+                              res =
+                                traverse(state0, idx, dir, connSize == 0)
+
+                              neighbourIdx =
+                                res.furthestLocationIndex
+
+                              case (neighbourIdx) {
+                                Maybe::Just idx2 =>
+                                  if (res.isIslandIndex) {
+                                    try {
+                                      getIslandConnectionSizes(state0, idx2)
+                                      |> Maybe.andThen(
+                                        (conns2 : ConnectionSizes) {
+                                          try {
+                                            connSize2 =
+                                              Model.directionToConnectionSize(conns2, Model.oppositeDirection(dir))
+
+                                            if (connSize2 < state0.maxConnectionCount) {
+                                              Maybe::Just(Maybe::Just(Bridge(connSize2, orientation, idx2, idx)))
+                                            } else {
+                                              Maybe::Just(Maybe::Nothing)
+                                            }
+                                          }
+                                        })
+                                      |> Maybe.withDefault(Maybe::Just(Bridge(0, orientation, idx, idx2)))
+                                    }
+                                  } else {
+                                    Maybe::Nothing
+                                  }
+
+                                => Maybe::Nothing
+                              }
+                            }
+                          } else {
+                            Maybe::Nothing
+                          }
+                        }
+                      })
+                    |> Array.compact()
+                  })
+                |> Maybe.withDefault([])
+
+              Array.append(acc, islandBridges)
+              |> Util.Collection.distinct(
+                (bridge : Bridge) {
+                  try {
+                    sortedIdx1 =
+                      Math.min(bridge.idx1, bridge.idx2)
+
+                    sortedIdx2 =
+                      Math.max(bridge.idx1, bridge.idx2)
+
+                    Number.toString(sortedIdx1) + "+" + Number.toString(sortedIdx2)
+                  }
+                })
+            }
+          })
+      }
+
     /* returns directions with max distances (but minimum 2) */
     emptyDirsFromIsland =
       (genState : GenerationState, idx : Number) : Array(Tuple(Direction, Number)) {
@@ -415,23 +479,11 @@ module Generation {
                     dir : Direction
                   ) {
                     try {
-                      {furthestIndex, isIslandIndex, atDistance} =
+                      res =
                         traverse(genState, idx, dir, true)
 
-                      maxDistance =
-                        furthestIndex
-                        |> Maybe.map(
-                          (idx : Number) {
-                            if (isIslandIndex) {
-                              atDistance - 1
-                            } else {
-                              atDistance
-                            }
-                          })
-                        |> Maybe.withDefault(0)
-
-                      if (maxDistance >= 2) {
-                        Array.push({dir, maxDistance}, acc)
+                      if (res.distance >= 2) {
+                        Array.push({dir, res.distance}, acc)
                       } else {
                         acc
                       }
@@ -530,27 +582,68 @@ module Generation {
     createCycles =
       (state0 : GenerationState, rand0 : Rand) : Tuple(GenerationState, Rand) {
         try {
-          /* TODO filter the list to islands with directions that can join to a existing neighbours */
-          {filteredIslandsIdxs, idxToDirsWithDistance} =
-            filterIslandsWhichCanHaveNewNeighbours(state0)
+          islandsBridges =
+            filterIslandsWhichCanIncreaseOrCreateConnectionToNeighbour(state0)
+            |> Array.select((bridge : Bridge) { bridge.connectionCount == 0 })
 
-          /* TODO scale down this chance because it is not alfa*n but much higher due to len(filteredIslandsIdxs) << n */
           chance =
             state0.cycleImprovementPercent
 
-          chosenIslandsIdxs =
-            filteredIslandsIdxs
-            |> Random.filterByChance(chance, rand0)
+          islandsBridges
+          |> Array.reduce(
+            {state0, rand0},
+            (acc : Tuple(GenerationState, Rand), bridge : Bridge) {
+              try {
+                {state1, rand1} =
+                  acc
 
-          /* TODO make new connections for the chosen indices+dirs */
-          {state0, rand0}
+                {shouldProceed, rand2} =
+                  Random.chance(chance, rand1)
+
+                state2 =
+                  shouldProceed
+                  |> Bools.resolve(
+                    () { increaseConnection(bridge.idx1, bridge.idx2, state1) },
+                    state1)
+
+                {state2, rand2}
+              }
+            })
         }
       }
 
     increaseConnectionCounts =
       (state0 : GenerationState, rand0 : Rand) : Tuple(GenerationState, Rand) {
         try {
-          {state0, rand0}
+          islandsBridges =
+            filterIslandsWhichCanIncreaseOrCreateConnectionToNeighbour(state0)
+            |> log("filtered")
+            |> Array.select(
+              (bridge : Bridge) { bridge.connectionCount > 0 && bridge.connectionCount < state0.maxConnectionCount })
+
+          chance =
+            state0.increaseConnectionCountsPercent
+
+          islandsBridges
+          |> Array.reduce(
+            {state0, rand0},
+            (acc : Tuple(GenerationState, Rand), bridge : Bridge) {
+              try {
+                {state0, rand0} =
+                  acc
+
+                {shouldProceed, rand1} =
+                  Random.chance(chance, rand0)
+
+                state1 =
+                  shouldProceed
+                  |> Bools.resolve(
+                    () { increaseConnection(bridge.idx1, bridge.idx2, state0) },
+                    state0)
+
+                {state1, rand1}
+              }
+            })
         }
       }
 
@@ -609,13 +702,18 @@ module Generation {
       })
   }
 
-  /* returns: maybe index; bool: true when is index island or else when last index; distance travelled */
+  /*
+  Traverses through map in a direction from starting point and returns:
+     - maybe furthest achieved location (index);
+     - bool: true when is index island or else when last index;
+     - distance travelled until collision
+  */
   fun traverse (
     genState : GenerationState,
     fromIndex : Number,
     direction : Direction,
     shouldCheckConnections : Bool
-  ) : Tuple(Maybe(Number), Bool, Number) {
+  ) : TraverseResult {
     try {
       diff =
         Model.directionToPosDiff(direction)
@@ -624,7 +722,12 @@ module Generation {
         Model.idxXY(genState.width, fromIndex)
 
       iterate =
-        (x : Number, y : Number, distance : Number) : Tuple(Maybe(Number), Bool, Number) {
+        (
+          x : Number,
+          y : Number,
+          distance : Number,
+          prevIdx : Number
+        ) : TraverseResult {
           try {
             idx =
               Model.xyIdx(genState.width, x, y)
@@ -632,9 +735,9 @@ module Generation {
             if (x < 0 || x >= genState.width || y >= genState.height || y < 0) {
               try {
                 if (distance == 0) {
-                  {Maybe::Nothing, false, 0}
+                  TraverseResult(Maybe::Nothing, false, 0)
                 } else {
-                  {Maybe::Just(idx), false, distance}
+                  TraverseResult(Maybe::Just(prevIdx), false, distance)
                 }
               }
             } else {
@@ -657,25 +760,32 @@ module Generation {
                     true
                   }
 
+                dist =
+                  distance - 1
+
                 if (shouldCheckIsland) {
                   case (field) {
                     Maybe::Just whatever =>
                       case (whatever) {
-                        FieldType::Island => {Maybe::Just(idx), true, distance + 1}
-                        FieldType::Connection => iterate(x + diff.x, y + diff.y, distance + 1)
+                        FieldType::Island => TraverseResult(Maybe::Just(idx), true, dist)
+                        FieldType::Connection => iterate(x + diff.x, y + diff.y, distance + 1, idx)
                       }
 
-                    => iterate(x + diff.x, y + diff.y, distance + 1)
+                    => iterate(x + diff.x, y + diff.y, distance + 1, idx)
                   }
                 } else {
-                  {Maybe::Just(idx), false, distance}
+                  TraverseResult(if (distance == 0) {
+                    Maybe::Nothing
+                  } else {
+                    Maybe::Just(prevIdx)
+                  }, false, distance)
                 }
               }
             }
           }
         }
 
-      iterate(startX + diff.x, startY + diff.y, 0)
+      iterate(startX + diff.x, startY + diff.y, 0, fromIndex)
     }
   }
 

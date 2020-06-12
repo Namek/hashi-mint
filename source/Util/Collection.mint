@@ -62,4 +62,24 @@ module Util.Collection {
         }
       }
   }
+
+  fun distinct (elToKey : Function(v, String), arr : Array(v)) : Array(v) {
+    arr
+    |> Array.reduce(
+      Map.empty(),
+      (acc : Map(String, v), el : v) {
+        try {
+          key =
+            elToKey(el)
+
+          if (Map.has(key, acc)) {
+            acc
+          } else {
+            acc
+            |> Map.set(key, el)
+          }
+        }
+      })
+    |> Map.values()
+  }
 }

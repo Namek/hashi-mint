@@ -196,17 +196,17 @@ module Random {
         number(0, 100, rand)
 
       bool =
-        num <= percent
+        num > 0 && num <= percent
 
       {bool, rand1}
     }
   }
 
-  fun filterByChance (chance : Number, rand0 : Rand, els : Array(a)) : Tuple(Array(a), Rand) {
+  fun filterByChance (chance : Number, rand : Rand, els : Array(a)) : Tuple(Array(a), Rand) {
     els
     |> Array.reduce(
-      {[], rand0},
-      (acc : Tuple(Array(Number), Rand), idx : Number) {
+      {[], rand},
+      (acc : Tuple(Array(a), Rand), el : a) {
         try {
           {arr, rand1} =
             acc
@@ -216,7 +216,7 @@ module Random {
 
           newArr =
             if (accept) {
-              Array.push(idx, arr)
+              Array.push(el, arr)
             } else {
               arr
             }
