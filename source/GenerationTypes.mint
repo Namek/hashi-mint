@@ -28,18 +28,22 @@ enum FieldType {
   Connection
 }
 
-record GenerationState {
+record GenerationParams {
   width : Number,
   height : Number,
   maxConnectionCount : Number,
-  fieldsMap : Map(Number, FieldType),
-  islandIndices : Array(Number),
-  connectionsMaxList : Array(Connection),
   targetIslandCount : Number,
   /* range: 0 - 100 */
   cycleImprovementPercent : Number,
   /* range: 0 - 100 */
   increaseConnectionCountsPercent : Number
+}
+
+record GenerationState {
+  params : GenerationParams,
+  fieldsMap : Map(Number, FieldType),
+  islandIndices : Array(Number),
+  connectionsMaxList : Array(Connection)
 }
 
 record IslandConnection {

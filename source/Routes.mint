@@ -4,7 +4,17 @@ routes {
       seed =
         412321
 
-      Game.initPuzzle(seed, 8, 8)
+      params =
+        {
+          width = 8,
+          height = 8,
+          maxConnectionCount = 2,
+          targetIslandCount = 20,
+          cycleImprovementPercent = 50,
+          increaseConnectionCountsPercent = 30
+        }
+
+      Game.initPuzzle(seed, params)
     }
   }
 }

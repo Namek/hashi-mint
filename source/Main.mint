@@ -33,11 +33,11 @@ store Game {
   state moveHistory : Array(IndexPair) = []
   state islandDrag : IslandDrag = IslandDrag::NoIslandsHovered
 
-  fun initPuzzle (seed : Number, width : Number, height : Number) {
+  fun initPuzzle (seed : Number, params : GenerationParams) {
     try {
       next { seed = Random.init(seed) }
 
-      setPuzzle(Generation.generatePuzzle(seed, width, height))
+      setPuzzle(Generation.generatePuzzle(seed, params))
     }
   }
 
