@@ -6,10 +6,10 @@ routes {
 
       params =
         {
-          width = 8,
+          width = 9,
           height = 8,
           maxConnectionCount = 2,
-          targetIslandCount = 20,
+          targetIslandCount = 11,
           cycleImprovementPercent = 50,
           increaseConnectionCountsPercent = 30
         }

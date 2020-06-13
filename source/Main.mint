@@ -1,6 +1,7 @@
 component Main {
-  connect Game exposing { puzzle }
+  connect Game exposing { puzzle, genParams }
   connect Const exposing { scaleFactor, fieldSize, margin }
+  state showConfigurator = true
 
   style base {
     width: 100vw;
@@ -11,6 +12,23 @@ component Main {
     svg {
       user-select: none;
     }
+  }
+
+  style editor {
+    display: inline-block;
+
+    * {
+      margin-right: 10px;
+    }
+
+    label {
+      display: inline-block;
+    }
+  }
+
+  style sizeInput {
+    width: 35px;
+    text-align: center;
   }
 
   fun testRandom {
@@ -39,43 +57,99 @@ component Main {
   }
 
   fun render : Html {
-    <div::base
-      onPointerLeave={Game.gotDragShouldStop}
-      onPointerUp={Game.gotDragShouldStop}>
+    <div::base>
+      if (showConfigurator) {
+        <fieldset::editor>
+          <legend>
+            "Level Config"
+          </legend>
 
-      <div>
-        "seed:"
-        <{ Number.toString(Game.seed.state) }>
+          <label>
+            <span>
+              "Seed: "
+              <{ Number.toString(Game.seed) }>
+            </span>
 
-        /*
-        "randoms:"
-                <{ testRandom() }>
-        */
-        <{ Number.toString(fieldSize * scaleFactor) }>
-        <{ Number.toString(puzzle.width) }>
-        <br/>
+            <button onClick={Game.newSeed}>
+              "new seed"
+            </button>
+          </label>
 
-        <button
-          onClick={Game.stepBack}
-          disabled={Game.moveHistory == []}>
+          <label>
+            "Width: "
 
-          "Step Back"
+            <input::sizeInput
+              type="number"
+              min="4"
+              value={Number.toString(genParams.width)}
+              onInput={Game.setWidth}/>
+          </label>
 
-        </button>
+          <label>
+            "Width: "
 
-        <button onClick={Game.reset}>
-          "Reset"
-        </button>
-      </div>
+            <input::sizeInput
+              type="number"
+              min="4"
+              value={Number.toString(genParams.height)}
+              onInput={Game.setHeight}/>
+          </label>
 
-      <{ renderPuzzle() }>
+          <label>
+            "Islands: "
 
-      if (Game.isPuzzleDone) {
-        <div>
-          "Puzzle Done!"
-        </div>
+            <input::sizeInput
+              type="number"
+              min="2"
+              value={Number.toString(genParams.targetIslandCount)}
+              onChange={Game.setTargetIslandCount}/>
+          </label>
+
+          <input
+            type="range"
+            step="1"
+            min="0"
+            max="100"
+            value={Number.toString(genParams.cycleImprovementPercent)}
+            onInput={Game.setCycleImprovementPercent}/>
+
+          <input
+            type="range"
+            step="1"
+            min="0"
+            max="100"
+            value={Number.toString(genParams.increaseConnectionCountsPercent)}
+            onInput={Game.setIncreaseConnectionCountsPercent}/>
+        </fieldset>
       }
 
+      <div
+        onPointerLeave={Game.gotDragShouldStop}
+        onPointerUp={Game.gotDragShouldStop}>
+
+        <div>
+          <button
+            onClick={Game.stepBack}
+            disabled={Game.moveHistory == []}>
+
+            "Step Back"
+
+          </button>
+
+          <button onClick={Game.reset}>
+            "Reset"
+          </button>
+        </div>
+
+        <{ renderPuzzle() }>
+
+        if (Game.isPuzzleDone) {
+          <div>
+            "Puzzle Done!"
+          </div>
+        }
+
+      </div>
     </div>
   }
 
@@ -92,11 +166,11 @@ component Main {
           puzzle.connections.list)
       }>
 
-      <{
+      if (showConfigurator) {
         Array.map(
           renderConnection("stroke:rgb(127,127,127);stroke-width:0.1"),
           puzzle.connectionsMaxList)
-      }>
+      }
 
       case (Game.islandDrag) {
         IslandDrag::SecondIslandPicked percent idx1 idx2 => renderTemporaryBridge(idx1, idx2, percent)
@@ -224,6 +298,21 @@ component Main {
       data-y={Number.toString(y)}>
 
       <{ Util.Render.circle(number, pos.x, pos.y, isHovered, isFilled) }>
+
+      <g>
+        <text
+          x={Number.toString(pos.x - 1)}
+          y={Number.toString(pos.y + 1.5)}
+          textAnchor="end"
+          fontSize="2.5px"
+          fill="black">
+
+          <tspan>
+            "#{island.index}"
+          </tspan>
+
+        </text>
+      </g>
 
     </g>
   } where {
