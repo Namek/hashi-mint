@@ -39,8 +39,7 @@ record GenerationState {
   /* range: 0 - 100 */
   cycleImprovementPercent : Number,
   /* range: 0 - 100 */
-  increaseConnectionCountsPercent : Number,
-  totalConnectionCount : Number
+  increaseConnectionCountsPercent : Number
 }
 
 record IslandConnection {

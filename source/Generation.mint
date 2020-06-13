@@ -6,52 +6,7 @@ module Generation {
     Direction::Up
   ]
 
-  fun log (text : String, value : a) : a {
-    try {
-      log =
-        `console.log(#{text}, #{value})`
-
-      value
-    }
-  }
-
-  fun watch (text : String, tap : Function(a, b), value : a) : a {
-    try {
-      l =
-        log(text, tap(value))
-
-      value
-    }
-  }
-
-  fun logIf (text : String, tap : Function(a, Maybe(b)), value : a) : a {
-    try {
-      t0 =
-        tap(value)
-
-      t1 =
-        case (t0) {
-          Maybe::Just val => log(text, val)
-
-          => Maybe::Nothing
-        }
-
-      value
-    }
-  }
-
-  fun watchMeNoErr (val : Maybe(a)) : Maybe(a) {
-    if (Maybe.isJust(val)) {
-      val
-    } else {
-      try {
-        a =
-          Debug.log("error")
-
-        val
-      }
-    }
-  }
+  const MIN_ISLANDS_DISTANCE = 2
 
   fun generatePuzzle (seed : Number, width : Number, height : Number) : Puzzle {
     {
@@ -76,7 +31,7 @@ module Generation {
 
     /* TODO: generation params should depend on map size and difficulty level */
     {targetIslandCount, cycleImprovementPercent, increaseConnectionCountsPercent} =
-      {12, 70, 80}
+      {20, 50, 30}
 
     genState0 =
       {
@@ -88,12 +43,11 @@ module Generation {
         connectionsMaxList = [],
         targetIslandCount = targetIslandCount,
         cycleImprovementPercent = cycleImprovementPercent,
-        increaseConnectionCountsPercent = increaseConnectionCountsPercent,
-        totalConnectionCount = 0
+        increaseConnectionCountsPercent = increaseConnectionCountsPercent
       }
 
     genState1 =
-      log("RESULT", generateIslands(seed, genState0))
+      Misc.log("RESULT", generateIslands(seed, genState0))
 
     islandList =
       genState1.islandIndices
@@ -136,13 +90,13 @@ module Generation {
         Random.init(seed)
 
       l =
-        log("DIRECTIONS", DIRECTIONS)
+        Misc.log("DIRECTIONS", DIRECTIONS)
 
       {firstIslandX, firstIslandY, rand1} =
         randomizePosition(genState0.width, genState0.height, rand0)
 
       l0 =
-        log(
+        Misc.log(
           "firstIsland x, y",
           {
             x = firstIslandX,
@@ -204,12 +158,10 @@ module Generation {
             Model.xyIdx(genState.width, x, y)
 
           l =
-            log("addIsland ->", idx)
+            Misc.log("addIsland ->", idx)
 
           { genState |
-            islandIndices =
-              Array.push(idx, genState.islandIndices)
-              |> Array.sort((a : Number, b : Number) { a - b }),
+            islandIndices = Array.push(idx, genState.islandIndices),
             fieldsMap =
               Map.set(
                 idx,
@@ -227,13 +179,14 @@ module Generation {
       ) : GenerationState {
         try {
           l0 =
-            log("increaseConnectionToDirection", "start")
+            Misc.log("increaseConnectionToDirection", "start")
 
+          /* @optimize: we should look through the connectionsMaxList instead of traversing */
           res =
-            traverse(genState, idx, direction, true)
+            traverse(genState, idx, direction, false)
 
           l =
-            log(
+            Misc.log(
               "increaseConnectionToDirection ->",
               `#{res}`)
 
@@ -259,12 +212,12 @@ module Generation {
         try {
           conns1 =
             getIslandConnectionSizes(genState, idx1)
-            |> watchMeNoErr
+            |> Misc.watchMeNoErr
             |> Maybe.withDefault(ConnectionSizes(0, 0, 0, 0))
 
           conns2 =
             getIslandConnectionSizes(genState, idx2)
-            |> watchMeNoErr
+            |> Misc.watchMeNoErr
             |> Maybe.withDefault(ConnectionSizes(0, 0, 0, 0))
 
           dir1to2 =
@@ -286,7 +239,7 @@ module Generation {
               conns2)
 
           l =
-            log(
+            Misc.log(
               "increaseConnection ->",
               `{
                 idx1: #{idx1},
@@ -297,12 +250,10 @@ module Generation {
 
           {existingConnection, restConns} =
             genState.connectionsMaxList
-            |> log("increaseConnection: before")
             |> Util.Collection.findAndGetRest(
               (conn : Connection) : Bool {
-                conn.idx1 == idx1 && conn.idx2 == idx2 || conn.idx1 == idx2 && conn.idx2 == idx1
+                (conn.idx1 == idx1 && conn.idx2 == idx2) || (conn.idx1 == idx2 && conn.idx2 == idx1)
               })
-            |> log("increaseConnection: existingConnection")
 
           newConnection =
             case (existingConnection) {
@@ -316,15 +267,16 @@ module Generation {
                   orientation = Model.directionToOrientation(dir1to2)
                 }
             }
-            |> log("increaseConnection: newConnection")
+            |> Misc.log("increaseConnection: newConnection")
 
           { genState |
             fieldsMap =
               genState.fieldsMap
+              |> Map.delete(idx1)
+              |> Map.delete(idx2)
               |> Map.set(idx1, FieldType::Island(idx1, newConns1))
               |> Map.set(idx2, FieldType::Island(idx2, newConns2)),
-            connectionsMaxList = Array.push(newConnection, restConns),
-            totalConnectionCount = genState.totalConnectionCount + 1
+            connectionsMaxList = Array.push(newConnection, restConns)
           }
           |> fillConnectionBetween(idx1, idx2)
         }
@@ -482,7 +434,10 @@ module Generation {
                       res =
                         traverse(genState, idx, dir, true)
 
-                      if (res.distance >= 2) {
+                      spaceBetweenIslands =
+                        res.distance - 1
+
+                      if (spaceBetweenIslands >= MIN_ISLANDS_DISTANCE) {
                         Array.push({dir, res.distance}, acc)
                       } else {
                         acc
@@ -524,58 +479,80 @@ module Generation {
 
     generateIslandsOnly =
       (state0 : GenerationState, rand0 : Rand) : Tuple(GenerationState, Rand) {
-        if (Array.size(state0.islandIndices) >= state0.targetIslandCount) {
-          {state0, rand0}
-        } else {
-          try {
-            {filteredIslandsIdxs, idxToDirsWithDistance} =
-              filterIslandsWhichCanHaveNewNeighbours(state0)
-
-            {maybeIdx0, rand1} =
-              Random.choiceMaybe(filteredIslandsIdxs, rand0)
-
-            case (maybeIdx0) {
-              Maybe::Nothing => {state0, rand1}
-
-              Maybe::Just idx0 =>
+        try {
+          iter =
+            (
+              state1 : GenerationState,
+              rand1 : Rand,
+              failCount : Number
+            ) : Tuple(GenerationState, Rand) {
+              if (failCount >= 3 || Array.size(state1.islandIndices) >= state1.targetIslandCount) {
+                {state1, rand1}
+              } else {
                 try {
-                  curIslandConnectionSizes =
-                    getIslandConnectionSizes(state0, idx0)
+                  {filteredIslandsIdxs, idxToDirsWithDistance} =
+                    filterIslandsWhichCanHaveNewNeighbours(state1)
 
-                  possibleDirections =
-                    emptyDirsFromIsland(state0, idx0)
+                  {maybeIdx0, rand2} =
+                    Random.choiceMaybe(filteredIslandsIdxs, rand1)
 
-                  if (Array.size(possibleDirections) > 0) {
-                    try {
-                      {d, rand2} =
-                        Random.choice(possibleDirections, rand1)
+                  case (maybeIdx0) {
+                    Maybe::Nothing => {state1, rand2}
 
-                      {newDirection, maxDistance} =
-                        d
+                    Maybe::Just idx0 =>
+                      try {
+                        curIslandConnectionSizes =
+                          getIslandConnectionSizes(state1, idx0)
 
-                      {distance, rand3} =
-                        Random.number(2, maxDistance, rand2)
+                        possibleDirections =
+                          emptyDirsFromIsland(state1, idx0)
 
-                      targetIndex =
-                        movePosition(state0.width, idx0, newDirection, distance)
+                        if (Array.size(possibleDirections) > 0) {
+                          try {
+                            {d, rand3} =
+                              Random.choice(possibleDirections, rand2)
 
-                      {newX, newY} =
-                        Model.idxXY(state0.width, targetIndex)
+                            {newDirection, maxDistance} =
+                              d
 
-                      state1 =
-                        addIsland(newX, newY, state0)
+                            {distance, rand4} =
+                              Random.number(MIN_ISLANDS_DISTANCE, maxDistance, rand3)
 
-                      state2 =
-                        increaseConnection(idx0, targetIndex, state1)
+                            targetIndex =
+                              movePosition(state1.width, idx0, newDirection, distance)
 
-                      generateIslandsOnly(state2, rand3)
-                    }
-                  } else {
-                    {state0, rand1}
+                            /* check whether island can be actually placed on this position */
+                            closestNeighbourDistance =
+                              findClosestIslandDistance(targetIndex, state1)
+                              |> Maybe.withDefault(MIN_ISLANDS_DISTANCE)
+
+                            if (closestNeighbourDistance >= MIN_ISLANDS_DISTANCE) {
+                              try {
+                                {newX, newY} =
+                                  Model.idxXY(state1.width, targetIndex)
+
+                                state2 =
+                                  addIsland(newX, newY, state1)
+
+                                state3 =
+                                  increaseConnection(idx0, targetIndex, state2)
+
+                                iter(state3, rand3, failCount)
+                              }
+                            } else {
+                              iter(state1, rand3, failCount + 1)
+                            }
+                          }
+                        } else {
+                          {state1, rand2}
+                        }
+                      }
                   }
                 }
+              }
             }
-          }
+
+          iter(state0, rand0, 0)
         }
       }
 
@@ -585,6 +562,7 @@ module Generation {
           islandsBridges =
             filterIslandsWhichCanIncreaseOrCreateConnectionToNeighbour(state0)
             |> Array.select((bridge : Bridge) { bridge.connectionCount == 0 })
+            |> Misc.log("what filtered0")
 
           chance =
             state0.cycleImprovementPercent
@@ -617,7 +595,7 @@ module Generation {
         try {
           islandsBridges =
             filterIslandsWhichCanIncreaseOrCreateConnectionToNeighbour(state0)
-            |> log("filtered")
+            |> Misc.log("filtered")
             |> Array.select(
               (bridge : Bridge) { bridge.connectionCount > 0 && bridge.connectionCount < state0.maxConnectionCount })
 
@@ -629,64 +607,21 @@ module Generation {
             {state0, rand0},
             (acc : Tuple(GenerationState, Rand), bridge : Bridge) {
               try {
-                {state0, rand0} =
+                {state1, rand1} =
                   acc
 
-                {shouldProceed, rand1} =
-                  Random.chance(chance, rand0)
+                {shouldProceed, rand2} =
+                  Random.chance(chance, rand1)
 
-                state1 =
+                state2 =
                   shouldProceed
                   |> Bools.resolve(
-                    () { increaseConnection(bridge.idx1, bridge.idx2, state0) },
-                    state0)
+                    () { increaseConnection(bridge.idx1, bridge.idx2, state1) },
+                    state1)
 
-                {state1, rand1}
+                {state2, rand2}
               }
             })
-        }
-      }
-
-    increaseConnectionFromExistingIslandIfPossible =
-      (genState : GenerationState, rand1 : Rand) : Tuple(GenerationState, Rand) {
-        try {
-          {idx, rand2} =
-            Random.choice(genState.islandIndices, rand1)
-
-          curIslandConnectionSizes =
-            getIslandConnectionSizes(genState, idx)
-
-          dirs =
-            curIslandConnectionSizes
-            |> Maybe.map(
-              (conns : ConnectionSizes) : Array(Direction) {
-                for (dir of DIRECTIONS) {
-                  dir
-                } when {
-                  try {
-                    currentConnectionSize =
-                      Model.directionToConnectionSize(conns, dir)
-
-                    (currentConnectionSize > 0 && currentConnectionSize < genState.maxConnectionCount)
-                  }
-                }
-              })
-            |> Maybe.withDefault([])
-
-          case (dirs) {
-            [dir, ...restDirs] =>
-              try {
-                {randomDir, rand3} =
-                  Random.choiceSafe(dir, restDirs, rand2)
-
-                genState1 =
-                  increaseConnectionToDirection(idx, randomDir, genState)
-
-                {genState1, rand3}
-              }
-
-            => {genState, rand2}
-          }
         }
       }
   }
@@ -706,7 +641,7 @@ module Generation {
   Traverses through map in a direction from starting point and returns:
      - maybe furthest achieved location (index);
      - bool: true when is index island or else when last index;
-     - distance travelled until collision
+     - distance travelled
   */
   fun traverse (
     genState : GenerationState,
@@ -760,14 +695,11 @@ module Generation {
                     true
                   }
 
-                dist =
-                  distance - 1
-
                 if (shouldCheckIsland) {
                   case (field) {
                     Maybe::Just whatever =>
                       case (whatever) {
-                        FieldType::Island => TraverseResult(Maybe::Just(idx), true, dist)
+                        FieldType::Island => TraverseResult(Maybe::Just(idx), true, distance + 1)
                         FieldType::Connection => iterate(x + diff.x, y + diff.y, distance + 1, idx)
                       }
 
@@ -787,6 +719,28 @@ module Generation {
 
       iterate(startX + diff.x, startY + diff.y, 0, fromIndex)
     }
+  }
+
+  fun findClosestIslandDistance (posIdx : Number, state0 : GenerationState) : Maybe(Number) {
+    DIRECTIONS
+    |> Array.reduce(
+      Maybe::Nothing,
+      (foundMin : Maybe(Number), dir : Direction) {
+        try {
+          res =
+            traverse(state0, posIdx, dir, false)
+
+          if (res.isIslandIndex) {
+            case (foundMin) {
+              Maybe::Just val => Maybe::Just(Math.min(val, res.distance))
+
+              => Maybe::Just(res.distance)
+            }
+          } else {
+            foundMin
+          }
+        }
+      })
   }
 
   fun movePosition (
