@@ -89,19 +89,8 @@ module Generation {
       rand0 =
         Random.init(seed)
 
-      l =
-        Misc.log("DIRECTIONS", DIRECTIONS)
-
       {firstIslandX, firstIslandY, rand1} =
         randomizePosition(genState0.width, genState0.height, rand0)
-
-      l0 =
-        Misc.log(
-          "firstIsland x, y",
-          {
-            x = firstIslandX,
-            y = firstIslandY
-          })
 
       firstIslandIdx =
         Model.xyIdx(genState0.width, firstIslandX, firstIslandY)
@@ -178,17 +167,9 @@ module Generation {
         genState : GenerationState
       ) : GenerationState {
         try {
-          l0 =
-            Misc.log("increaseConnectionToDirection", "start")
-
           /* @optimize: we should look through the connectionsMaxList instead of traversing */
           res =
             traverse(genState, idx, direction, false)
-
-          l =
-            Misc.log(
-              "increaseConnectionToDirection ->",
-              `#{res}`)
 
           case (res.furthestLocationIndex) {
             Maybe::Just idx2 =>
@@ -267,7 +248,6 @@ module Generation {
                   orientation = Model.directionToOrientation(dir1to2)
                 }
             }
-            |> Misc.log("increaseConnection: newConnection")
 
           { genState |
             fieldsMap =
@@ -562,7 +542,6 @@ module Generation {
           islandsBridges =
             filterIslandsWhichCanIncreaseOrCreateConnectionToNeighbour(state0)
             |> Array.select((bridge : Bridge) { bridge.connectionCount == 0 })
-            |> Misc.log("what filtered0")
 
           chance =
             state0.cycleImprovementPercent
@@ -595,7 +574,6 @@ module Generation {
         try {
           islandsBridges =
             filterIslandsWhichCanIncreaseOrCreateConnectionToNeighbour(state0)
-            |> Misc.log("filtered")
             |> Array.select(
               (bridge : Bridge) { bridge.connectionCount > 0 && bridge.connectionCount < state0.maxConnectionCount })
 
