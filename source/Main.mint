@@ -1,7 +1,12 @@
 component Main {
-  connect Game exposing { puzzle, genParams }
+  connect Game exposing { puzzle }
   connect Const exposing { scaleFactor, fieldSize, margin }
+
   state showConfigurator = true
+
+  fun toggleConfigurator {
+    next { showConfigurator = !showConfigurator }
+  }
 
   style base {
     width: 100vw;
@@ -12,23 +17,6 @@ component Main {
     svg {
       user-select: none;
     }
-  }
-
-  style editor {
-    display: inline-block;
-
-    * {
-      margin-right: 10px;
-    }
-
-    label {
-      display: inline-block;
-    }
-  }
-
-  style sizeInput {
-    width: 35px;
-    text-align: center;
   }
 
   fun testRandom {
@@ -56,10 +44,6 @@ component Main {
     }
   }
 
-  fun toggleConfigurator {
-    next { showConfigurator = !showConfigurator }
-  }
-
   fun render : Html {
     <div::base>
       <input
@@ -68,69 +52,16 @@ component Main {
         onChange={toggleConfigurator}/>
 
       if (showConfigurator) {
-        <fieldset::editor>
-          <legend>
-            "Level Config"
-          </legend>
-
-          <label>
-            <span>
-              "Seed: "
-              <{ Number.toString(Game.seed) }>
-            </span>
-
-            <button onClick={Game.newSeed}>
-              "new seed"
-            </button>
-          </label>
-
-          <label>
-            "Width: "
-
-            <input::sizeInput
-              type="number"
-              min="4"
-              value={Number.toString(genParams.width)}
-              onInput={Game.setWidth}/>
-          </label>
-
-          <label>
-            "Height: "
-
-            <input::sizeInput
-              type="number"
-              min="4"
-              value={Number.toString(genParams.height)}
-              onInput={Game.setHeight}/>
-          </label>
-
-          <label>
-            "Islands: "
-
-            <input::sizeInput
-              type="number"
-              min="2"
-              value={Number.toString(genParams.targetIslandCount)}
-              onChange={Game.setTargetIslandCount}/>
-          </label>
-
-          <input
-            type="range"
-            step="1"
-            min="0"
-            max="100"
-            value={Number.toString(genParams.cycleImprovementPercent)}
-            onInput={Game.setCycleImprovementPercent}/>
-
-          <input
-            type="range"
-            step="1"
-            min="0"
-            max="100"
-            value={Number.toString(genParams.increaseConnectionCountsPercent)}
-            onInput={Game.setIncreaseConnectionCountsPercent}/>
-        </fieldset>
+        <LevelEditor/>
       }
+
+      <div>
+        "Link to share:"
+
+        <input
+          disabled={true}
+          value={Number.toString(Game.seed)}/>
+      </div>
 
       <div
         onPointerLeave={Game.gotDragShouldStop}
@@ -308,20 +239,22 @@ component Main {
 
       <{ Util.Render.circle(number, pos.x, pos.y, isHovered, isFilled) }>
 
-      <g>
-        <text
-          x={Number.toString(pos.x - 1)}
-          y={Number.toString(pos.y + 1.5)}
-          textAnchor="end"
-          fontSize="2.5px"
-          fill="black">
+      if (showConfigurator) {
+        <g>
+          <text
+            x={Number.toString(pos.x - 1)}
+            y={Number.toString(pos.y + 1.5)}
+            textAnchor="end"
+            fontSize="2.5px"
+            fill="black">
 
-          <tspan>
-            "#{island.index}"
-          </tspan>
+            <tspan>
+              "#{island.index}"
+            </tspan>
 
-        </text>
-      </g>
+          </text>
+        </g>
+      }
 
     </g>
   } where {

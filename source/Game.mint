@@ -55,6 +55,10 @@ store Game {
     }
   }
 
+  fun changeGenParams (params : GenerationParams) {
+    Game.initPuzzle(seed, params)
+  }
+
   fun setPuzzle (p : Puzzle) : Promise(Never, Void) {
     next
       {
@@ -304,85 +308,6 @@ store Game {
 
     dy =
       to.y - from.y
-  }
-
-  fun setCycleImprovementPercent (evt : Html.Event) {
-    try {
-      newGenParams =
-        { genParams | cycleImprovementPercent = getEventNumber(evt) }
-
-      next { genParams = newGenParams }
-
-      Game.initPuzzle(seed, newGenParams)
-    }
-  }
-
-  fun setIncreaseConnectionCountsPercent (evt : Html.Event) {
-    try {
-      newGenParams =
-        { genParams | increaseConnectionCountsPercent = getEventNumber(evt) }
-
-      next { genParams = newGenParams }
-
-      Game.initPuzzle(seed, newGenParams)
-    }
-  }
-
-  fun newSeed {
-    try {
-      seed =
-        `Math.floor(Math.random() * 100000)`
-
-      next { seed = seed }
-      Game.initPuzzle(seed, genParams)
-    }
-  }
-
-  fun setWidth (evt : Html.Event) {
-    try {
-      width =
-        getEventNumber(evt)
-
-      newGenParams =
-        { genParams | width = width }
-
-      next { genParams = newGenParams }
-
-      Game.initPuzzle(seed, newGenParams)
-    }
-  }
-
-  fun setHeight (evt : Html.Event) {
-    try {
-      height =
-        getEventNumber(evt)
-
-      newGenParams =
-        { genParams | height = height }
-
-      next { genParams = newGenParams }
-
-      Game.initPuzzle(seed, newGenParams)
-    }
-  }
-
-  fun setTargetIslandCount (evt : Html.Event) {
-    try {
-      targetIslandCount =
-        getEventNumber(evt)
-
-      newGenParams =
-        { genParams | targetIslandCount = targetIslandCount }
-
-      next { genParams = newGenParams }
-
-      Game.initPuzzle(seed, newGenParams)
-    }
-  }
-
-  fun getEventNumber (evt : Html.Event) : Number {
-    Number.fromString(`#{evt}.target.value`)
-    |> Maybe.withDefault(0)
   }
 }
 
