@@ -2,16 +2,16 @@ routes {
   / {
     try {
       seed =
-        412321
+        34662
 
       params =
         {
           width = 9,
           height = 8,
           maxConnectionCount = 2,
-          targetIslandCount = 11,
+          targetIslandCount = 26,
           cycleImprovementPercent = 50,
-          increaseConnectionCountsPercent = 30
+          increaseConnectionCountsPercent = 20
         }
 
       Game.initPuzzle(seed, params)

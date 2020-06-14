@@ -402,11 +402,15 @@ module Generation {
                       res =
                         traverse(genState, idx, dir, true)
 
-                      spaceBetweenIslands =
+                      d =
+                        if (res.isIslandIndex) {
                         res.distance - 1
+                        } else {
+                          res.distance
+                        }
 
-                      if (spaceBetweenIslands >= MIN_ISLANDS_DISTANCE) {
-                        Array.push({dir, res.distance}, acc)
+                      if (d >= MIN_ISLANDS_DISTANCE) {
+                        Array.push({dir, d}, acc)
                       } else {
                         acc
                       }
@@ -454,7 +458,7 @@ module Generation {
               rand1 : Rand,
               failCount : Number
             ) : Tuple(GenerationState, Rand) {
-              if (failCount >= 3 || Array.size(state1.islandIndices) >= state1.params.targetIslandCount) {
+              if (failCount >= 15 || Array.size(state1.islandIndices) >= state1.params.targetIslandCount) {
                 {state1, rand1}
               } else {
                 try {
@@ -464,27 +468,42 @@ module Generation {
                   {maybeIdx0, rand2} =
                     Random.choiceMaybe(filteredIslandsIdxs, rand1)
 
-                  case (maybeIdx0) {
-                    Maybe::Nothing => {state1, rand2}
-
-                    Maybe::Just idx0 =>
+                  maybeIdx0
+                  |> Maybe.map(
+                    (idx : Number) : Tuple(Number, Array(Tuple(Direction, Number))) {
+                      {
+                        idx, Map.get(idx, idxToDirsWithDistance)
+                        |> Maybe.withDefault([])
+                      }
+                    })
+                  |> Maybe.map(
+                    (
+                      filtered : Tuple(Number, Array(Tuple(Direction, Number)))
+                    ) {
                       try {
-                        curIslandConnectionSizes =
-                          getIslandConnectionSizes(state1, idx0)
+                        {idx0, dirsWithDistances} =
+                          filtered
 
-                        possibleDirections =
-                          emptyDirsFromIsland(state1, idx0)
-
-                        if (Array.size(possibleDirections) > 0) {
+                        if (Array.size(dirsWithDistances) > 0) {
                           try {
                             {d, rand3} =
-                              Random.choice(possibleDirections, rand2)
+                              Random.choice(dirsWithDistances, rand2)
 
-                            {newDirection, maxDistance} =
+                            {newDirection, longestDistance} =
                               d
 
-                            {distance, rand4} =
-                              Random.number(MIN_ISLANDS_DISTANCE, maxDistance, rand3)
+                            {shouldUseLongestDistance, rand4} =
+                              Random.chance(30, rand3)
+
+                            maxDistance =
+                              if (shouldUseLongestDistance) {
+                                longestDistance
+                              } else {
+                                Math.min(4, longestDistance)
+                              }
+
+                            {distance, rand5} =
+                              Random.number(MIN_ISLANDS_DISTANCE, maxDistance, rand4)
 
                             targetIndex =
                               movePosition(state1.params.width, idx0, newDirection, distance)
@@ -505,17 +524,18 @@ module Generation {
                                 state3 =
                                   increaseConnection(idx0, targetIndex, state2)
 
-                                iter(state3, rand3, failCount)
+                                iter(state3, rand5, failCount)
                               }
                             } else {
-                              iter(state1, rand3, failCount + 1)
+                              iter(state1, rand5, failCount + 1)
                             }
                           }
                         } else {
                           {state1, rand2}
                         }
                       }
-                  }
+                    })
+                  |> Maybe.withDefault({state1, rand2})
                 }
               }
             }

@@ -56,8 +56,17 @@ component Main {
     }
   }
 
+  fun toggleConfigurator {
+    next { showConfigurator = !showConfigurator }
+  }
+
   fun render : Html {
     <div::base>
+      <input
+        type="checkbox"
+        checked={showConfigurator}
+        onChange={toggleConfigurator}/>
+
       if (showConfigurator) {
         <fieldset::editor>
           <legend>
@@ -86,7 +95,7 @@ component Main {
           </label>
 
           <label>
-            "Width: "
+            "Height: "
 
             <input::sizeInput
               type="number"
