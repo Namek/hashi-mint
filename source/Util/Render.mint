@@ -12,14 +12,17 @@ module Util.Render {
         cy={Number.toString(posY)}
         r={Number.toString(Const.circleRadius)}
         fill={fill}
-        stroke={color(0, 0, 0)}/>
+        stroke={stroke}
+        strokeWidth="0.5"/>
 
       <text
         x={Number.toString(posX)}
         y={Number.toString(posY + 1.5)}
         textAnchor="middle"
         dominantBaseline="central"
-        fontSize="#{Const.circleRadius}pt">
+        fill={textFill}
+        fontSize="#{Const.circleRadius}pt"
+        fontFamily="Arial">
 
         <tspan>
           "#{number}"
@@ -28,13 +31,13 @@ module Util.Render {
       </text>
     </g>
   } where {
-    fill =
+    {fill, stroke, textFill} =
       if (!isHovered && isFilled) {
-        color(127, 127, 127)
+        {"#494850", "#494850", "#F8F8F8"}
       } else if (isHovered) {
-        color(255, 255, 255)
+        {"#228CDB", "#494850", "#F8F8F8"}
       } else {
-        color(255, 0, 0)
+        {"#F8F8F8", "#494850", "#494850"}
       }
   }
 

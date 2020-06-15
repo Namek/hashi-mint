@@ -2,7 +2,7 @@ component Main {
   connect Game exposing { puzzle }
   connect Const exposing { scaleFactor, fieldSize, margin }
 
-  state showConfigurator = true
+  state showConfigurator = false
 
   fun toggleConfigurator {
     next { showConfigurator = !showConfigurator }
@@ -12,7 +12,7 @@ component Main {
     width: 100vw;
     height: 100vh;
     margin: 0;
-    background-color: #ccc;
+    background-color: #F8F8F8;
 
     svg {
       user-select: none;
@@ -102,13 +102,13 @@ component Main {
 
       <{
         Array.map(
-          renderConnection("stroke:rgb(255,0,0);stroke-width:0.5"),
+          renderConnection("stroke:rgb(127,127,127);stroke-width:0.5"),
           puzzle.connections.list)
       }>
 
       if (showConfigurator) {
         Array.map(
-          renderConnection("stroke:rgb(127,127,127);stroke-width:0.1"),
+          renderConnection("stroke:rgb(255,0,0);stroke-width:0.5"),
           puzzle.connectionsMaxList)
       }
 
@@ -216,13 +216,13 @@ component Main {
         to.y - start.y
 
       endX =
-        start.x + dx * percent
+        to.x
 
       endY =
-        start.y + dy * percent
+        to.y
 
       lineStyle =
-        "stroke:rgb(0,255,0);stroke-width:5"
+        "stroke:#228CDB;stroke-width:3"
 
       Util.Render.line(start.x, start.y, endX, endY, lineStyle)
     }
