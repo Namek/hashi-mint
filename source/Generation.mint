@@ -148,30 +148,6 @@ module Generation {
         }
       }
 
-    increaseConnectionToDirection =
-      (
-        idx : Number,
-        direction : Direction,
-        genState : GenerationState
-      ) : GenerationState {
-        try {
-          /* @optimize: we should look through the connectionsMaxList instead of traversing */
-          res =
-            traverse(genState, idx, direction, false)
-
-          case (res.furthestLocationIndex) {
-            Maybe::Just idx2 =>
-              if (res.isIslandIndex) {
-                increaseConnection(idx, idx2, genState)
-              } else {
-                genState
-              }
-
-            => genState
-          }
-        }
-      }
-
     increaseConnection =
       (
         idx1 : Number,
@@ -747,79 +723,5 @@ module Generation {
 
       Model.xyIdx(width, x, y)
     }
-  }
-
-  fun sumConnectionSizes (conn1 : ConnectionSizes, conn2 : ConnectionSizes) : ConnectionSizes {
-    {
-      top = conn1.top + conn2.top,
-      right = conn1.right + conn2.right,
-      bottom = conn1.bottom + conn2.bottom,
-      left = conn1.left + conn2.left
-    }
-  }
-
-  fun directionToConnectionSizes (count : Number, dir : Direction) : ConnectionSizes {
-    {
-      top =
-        if (dir == Direction::Up) {
-          count
-        } else {
-          0
-        },
-      right =
-        if (dir == Direction::Right) {
-          count
-        } else {
-          0
-        },
-      bottom =
-        if (dir == Direction::Down) {
-          count
-        } else {
-          0
-        },
-      left =
-        if (dir == Direction::Left) {
-          count
-        } else {
-          0
-        }
-    }
-  }
-
-  fun puzzle1 : Puzzle {
-    {
-      islands =
-        {
-          list = [],
-          fields = Map.empty()
-        },
-      /* bridgesToIslands(width, bridges), */
-      connections =
-        {
-          list = [],
-          fieldss = Map.empty()
-        },
-      connectionsMaxList = [],
-      width = width,
-      height = height,
-      maxConnectionCount = 2
-    }
-  } where {
-    width =
-      4
-
-    height =
-      5
-
-    bridges =
-      [
-        Bridge(2, Orientation::Horizontal, 0, 3),
-        Bridge(1, Orientation::Vertical, 0, 16),
-        Bridge(1, Orientation::Vertical, 3, 11),
-        Bridge(1, Orientation::Horizontal, 9, 11),
-        Bridge(1, Orientation::Horizontal, 11, 19),
-        Bridge(1, Orientation::Horizontal, 16, 19)
-      ]
   }
 }
