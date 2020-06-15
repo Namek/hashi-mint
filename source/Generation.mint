@@ -380,7 +380,7 @@ module Generation {
 
                       d =
                         if (res.isIslandIndex) {
-                        res.distance - 1
+                          res.distance - 1
                         } else {
                           res.distance
                         }
@@ -543,6 +543,19 @@ module Generation {
 
                 state2 =
                   shouldProceed
+                  |> Bools.andThen(
+                    () {
+                      /* we need to check if there is a route. It might have changed */
+                      try {
+                        dir1to2 =
+                          Model.directionFromIsland(state1.params.width, bridge.idx1, bridge.idx2)
+
+                        res =
+                          traverse(state1, bridge.idx1, dir1to2, true)
+
+                        res.isIslandIndex && res.furthestLocationIndex == Maybe::Just(bridge.idx2)
+                      }
+                    })
                   |> Bools.resolve(
                     () { increaseConnection(bridge.idx1, bridge.idx2, state1) },
                     state1)

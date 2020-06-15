@@ -2,15 +2,15 @@ routes {
   / {
     try {
       seed =
-        34662
+        6103
 
       params =
         {
-          width = 9,
-          height = 8,
+          width = 7,
+          height = 10,
           maxConnectionCount = 2,
           targetIslandCount = 26,
-          cycleImprovementPercent = 50,
+          cycleImprovementPercent = 100,
           increaseConnectionCountsPercent = 20
         }
 
