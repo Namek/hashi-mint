@@ -10,6 +10,8 @@ store Const {
 }
 
 store Game {
+  const MIN_VECTOR_DISTANCE_FROM_CENTER_TO_DRAW_BRIDGE = Const.circleRadius * 1.5
+
   state puzzle : Puzzle = {
     islands =
       {
@@ -230,12 +232,36 @@ store Game {
                       rescaledPos.y
                     }
 
+                  len =
+                    Math.abs(to - from)
+
+                  distance =
+                    pos
+                    |> Util.Math.rescale(from, to, 0, len)
+
                   distancePercent =
                     pos
                     |> Util.Math.rescale(from, to, 0, 1)
                     |> Math.min(1)
 
+                  if (distance > MIN_VECTOR_DISTANCE_FROM_CENTER_TO_DRAW_BRIDGE) {
                   Maybe::Just({i1Idx, i2Idx, distancePercent})
+                  } else {
+                    try {
+                      /* remove the temporary bridge if touch comes back closer to circle */
+                      next
+                        {
+                          islandDrag =
+                            case (islandDrag) {
+                              IslandDrag::SecondIslandPicked percent idx1 idx2 => IslandDrag::FirstIslandPinned(idx1)
+
+                              => islandDrag
+                            }
+                        }
+
+                      Maybe::Nothing
+                    }
+                  }
                 }
 
               => Maybe::Nothing
