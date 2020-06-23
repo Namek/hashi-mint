@@ -1,6 +1,8 @@
 component Main {
   connect Game exposing { puzzle }
-  connect Const exposing { scaleFactor, fieldSize, margin }
+  connect Const exposing { margin }
+
+  use Provider.Resize { resizes = handleResizes }
 
   state showConfigurator = false
 
@@ -16,32 +18,37 @@ component Main {
 
     svg {
       user-select: none;
+      width: 100%;
+      height: auto;
+      max-width: 100%;
+      max-height: calc(100vh - 100px);
     }
   }
 
-  fun testRandom {
-    try {
-      rand0 =
-        Random.initRandomly()
+  const SVG_ID = "the-game"
 
-      iter =
-        (i : Number, rand : Rand, numbers : Array(Number)) {
-          if (i < 100) {
-            try {
-              {num, rand1} =
-                Random.number(0, 100, rand)
-
-              iter(i + 1, rand1, Array.push(num, numbers))
-            }
-          } else {
-            numbers
-          }
-        }
-
-      iter(0, rand0, [])
-      |> Array.map((num : Number) { Number.toString(num) })
-      |> Array.intersperse(",")
+  fun handleResizes (evt : Html.Event) : Promise(Never, Void) {
+    sequence {
+      recalculateScaleFactor()
+      next {  }
     }
+  }
+
+  fun componentDidMount {
+    sequence {
+      promise =
+        Timer.timeout(200, recalculateScaleFactor)
+
+      promise()
+    }
+  }
+
+  fun recalculateScaleFactor {
+    Dom.getElementById(SVG_ID)
+    |> Maybe.map(
+      Dom.getDimensions())
+    |> Maybe.map(
+      (rect : Dom.Dimensions) { Game.recalculateScaleFactor(rect.width, rect.height) })
   }
 
   fun render : Html {
@@ -52,7 +59,7 @@ component Main {
         onChange={toggleConfigurator}/>
 
       if (showConfigurator) {
-        <LevelEditor/>
+        <Editor.View/>
       }
 
       <div>
@@ -95,9 +102,10 @@ component Main {
 
   fun renderPuzzle : Html {
     <svg
-      width={Number.toString(puzzle.width * fieldSize * scaleFactor)}
-      height={Number.toString(puzzle.height * fieldSize * scaleFactor)}
-      viewBox="-#{margin} -#{margin} #{puzzle.width * fieldSize + margin * 2} #{puzzle.height * fieldSize + margin * 2}"
+      id={SVG_ID}
+      width={Number.toString(width)}
+      height={Number.toString(height)}
+      viewBox="-#{margin} -#{margin} #{width + margin * 2} #{height + margin * 2}"
       onPointerMove={Game.checkBridgeDirection}>
 
       <{
@@ -122,6 +130,12 @@ component Main {
       }
 
     </svg>
+  } where {
+    width =
+      Game.getLogicalWidth()
+
+    height =
+      Game.getLogicalHeight()
   }
 
   fun renderConnection (lineStyle : String, conn : Connection) : Html {
@@ -238,23 +252,6 @@ component Main {
       data-y={Number.toString(y)}>
 
       <{ Util.Render.circle(number, pos.x, pos.y, isHovered, isFilled) }>
-
-      if (showConfigurator) {
-        <g>
-          <text
-            x={Number.toString(pos.x - 1)}
-            y={Number.toString(pos.y + 1.5)}
-            textAnchor="end"
-            fontSize="2.5px"
-            fill="black">
-
-            <tspan>
-              "#{island.index}"
-            </tspan>
-
-          </text>
-        </g>
-      }
 
     </g>
   } where {

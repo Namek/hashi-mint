@@ -83,11 +83,15 @@ store Editor {
   }
 }
 
-component LevelEditor {
+component Editor.View {
   connect Game exposing { genParams }
 
   style editor {
     display: inline-block;
+    position: absolute;
+    top: 0;
+
+    background: white;
 
     * {
       margin-right: 10px;

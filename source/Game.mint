@@ -1,6 +1,5 @@
 store Const {
   state fieldSize : Number = 10
-  state scaleFactor : Number = 5
   state margin : Number = 2
 
   /* fieldSize / 2 */
@@ -11,6 +10,8 @@ store Const {
 
 store Game {
   const MIN_VECTOR_DISTANCE_FROM_CENTER_TO_DRAW_BRIDGE = Const.circleRadius * 1.5
+  state scaleFactor : Number = 1
+  state svgInternalOffsetX : Number = 0
 
   state puzzle : Puzzle = {
     islands =
@@ -72,6 +73,19 @@ store Game {
       }
   }
 
+  fun recalculateScaleFactor (width : Number, height : Number) {
+    try {
+      scaleFactor =
+        height / getLogicalHeight()
+
+      next
+        {
+          scaleFactor = scaleFactor,
+          svgInternalOffsetX = (getLogicalWidth() * scaleFactor - width) / 2
+        }
+    }
+  }
+
   fun stepBack : Promise(Never, Void) {
     case (Array.last(moveHistory)) {
       Maybe::Just move =>
@@ -95,6 +109,14 @@ store Game {
 
   fun reset : Promise(Never, Void) {
     setPuzzle(puzzleStart)
+  }
+
+  fun getLogicalWidth {
+    puzzle.width * Const.fieldSize
+  }
+
+  fun getLogicalHeight {
+    puzzle.height * Const.fieldSize
   }
 
   fun getIslandRenderPos (index : Number) : Vec2 {
@@ -172,10 +194,22 @@ store Game {
     next { islandDrag = IslandDrag::FirstIslandPinned(islandIndex) }
   }
 
+  fun getPosInsideSvg (evt : Html.Event) {
+    try {
+      inputPosInsideSvg =
+        Html.Extra.getOffsetPos(evt)
+
+      {
+        x = inputPosInsideSvg.x + svgInternalOffsetX,
+        y = inputPosInsideSvg.y
+      }
+    }
+  }
+
   fun checkBridgeDirection (evt : Html.Event) : Promise(Never, Void) {
     try {
       inputPos =
-        Html.Extra.getOffsetPos(evt)
+        getPosInsideSvg(evt)
 
       maybeFirstIslandIndex =
         case (islandDrag) {
@@ -245,7 +279,7 @@ store Game {
                     |> Math.min(1)
 
                   if (distance > MIN_VECTOR_DISTANCE_FROM_CENTER_TO_DRAW_BRIDGE) {
-                  Maybe::Just({i1Idx, i2Idx, distancePercent})
+                    Maybe::Just({i1Idx, i2Idx, distancePercent})
                   } else {
                     try {
                       /* remove the temporary bridge if touch comes back closer to circle */
@@ -295,24 +329,30 @@ store Game {
       x =
         Util.Math.rescale(
           0,
-          puzzle.width * Const.fieldSize * Const.scaleFactor,
+          w * Game.scaleFactor,
           -1 * Const.margin,
-          puzzle.width * Const.fieldSize + Const.margin,
+          w + Const.margin,
           pos.x),
       y =
         Util.Math.rescale(
           0,
-          puzzle.height * Const.fieldSize * Const.scaleFactor,
+          h * Game.scaleFactor,
           -1 * Const.margin,
-          puzzle.height * Const.fieldSize + Const.margin,
+          h + Const.margin,
           pos.y)
     }
+  } where {
+    w =
+      getLogicalWidth()
+
+    h =
+      getLogicalHeight()
   }
 
   fun physicalRenderPos (pos : Vec2) : Vec2 {
     {
-      x = (pos.x - Const.margin) * Const.scaleFactor,
-      y = (pos.y - Const.margin) * Const.scaleFactor
+      x = (pos.x - Const.margin),
+      y = (pos.y - Const.margin)
     }
   }
 
