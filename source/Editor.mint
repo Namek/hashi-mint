@@ -28,7 +28,7 @@ store Editor {
       seed =
         `Math.floor(Math.random() * 100000)`
 
-      Game.initPuzzle(seed, Game.genParams)
+      Game.changeSeed(seed)
     }
   }
 

@@ -11,7 +11,7 @@ routes {
           increaseConnectionCountsPercent = increaseConnectionCountsPercent
         }
 
-      App.setState(seed, params, UrlChange::Nothing)
+      App.setState(seed, params)
     }
   }
 
@@ -27,7 +27,7 @@ routes {
           increaseConnectionCountsPercent = 20
         }
 
-      App.setState(seed, params, UrlChange::Replace)
+      App.setState(seed, params)
     }
   }
 
@@ -43,7 +43,7 @@ routes {
           increaseConnectionCountsPercent = 20
         }
 
-      App.setState(seed, params, UrlChange::Replace)
+      App.setState(seed, params)
     }
   }
 
@@ -62,7 +62,7 @@ routes {
           increaseConnectionCountsPercent = 20
         }
 
-      App.setState(seed, params, UrlChange::PushNew)
+      App.setState(seed, params)
     }
   }
 }

@@ -1,31 +1,12 @@
-enum UrlChange {
-  Replace
-  PushNew
-  Nothing
-}
-
 store App {
-  fun setState (
-    seed : Number,
-    params : GenerationParams,
-    urlBehavior : UrlChange
-  ) {
+  state lastUrlNavigationState : Maybe(Tuple(Number, GenerationParams)) = Maybe::Nothing
+
+  fun setState (seed : Number, params : GenerationParams) {
     sequence {
       Game.initPuzzle(seed, params)
 
-      loc =
-        paramsToUrl(seed, params)
-
-      case (urlBehavior) {
-        UrlChange::Replace => Window.navigate(loc)
-        UrlChange::PushNew => `history.pushState({}, '', #{loc})`
-        UrlChange::Nothing => next {  }
-      }
+      next { lastUrlNavigationState = Maybe::Just({seed, params}) }
     }
-  }
-
-  fun replaceUrl (seed : Number, params : GenerationParams) {
-    Window.navigate(paramsToUrl(seed, params))
   }
 
   fun paramsToUrl (seed : Number, params : GenerationParams) : String {
@@ -37,6 +18,49 @@ store App {
         |> String.concat()
 
       "/puzzle/" + loc
+    }
+  }
+
+  fun watchUrl (seed : Number, params : GenerationParams) {
+    case (lastUrlNavigationState) {
+      Maybe::Just tpl =>
+        try {
+          {seed2, params2} =
+            tpl
+
+          if (seed != seed2 || params != params2) {
+            try {
+              `history.pushState({}, '', window.location.origin)`
+
+              next { lastUrlNavigationState = Maybe::Nothing }
+            }
+          } else {
+            next {  }
+          }
+        }
+
+      => next {  }
+    }
+  }
+
+  fun sharePuzzle {
+    try {
+      str =
+        `window.location.origin` + paramsToUrl(Game.seed, Game.genParams)
+
+      `
+      (() => {
+        var el = document.createElement('textarea');
+        el.value = #{str};
+        el.setAttribute('readonly', '');
+        el.style.position = 'absolute';
+        el.style.left = '-9999px';
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+      })()
+      `
     }
   }
 }
@@ -85,6 +109,10 @@ component Main {
       if (showConfigurator) {
         <Editor.View/>
       }
+
+      <button onClick={App.sharePuzzle}>
+        "🔗 Copy Puzzle Link"
+      </button>
 
       <Game.View as gameView isDebugMode={showConfigurator}/>
     </div>

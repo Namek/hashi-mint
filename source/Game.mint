@@ -59,7 +59,17 @@ store Game {
   }
 
   fun changeGenParams (params : GenerationParams) {
-    Game.initPuzzle(seed, params)
+    sequence {
+      Game.initPuzzle(seed, params)
+      App.watchUrl(seed, params)
+    }
+  }
+
+  fun changeSeed (seed : Number) {
+    sequence {
+      Game.initPuzzle(seed, genParams)
+      App.watchUrl(seed, genParams)
+    }
   }
 
   fun setPuzzle (p : Puzzle) : Promise(Never, Void) {
