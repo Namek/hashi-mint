@@ -75,10 +75,9 @@ component Main {
   }
 
   style base {
-    width: 100vw;
-    height: 100vh;
-    margin: 0;
-    background-color: #F8F8F8;
+    button {
+      font-size: 20px;
+    }
   }
 
   fun handleResizes (evt : Html.Event) : Promise(Never, Void) {
