@@ -45,7 +45,7 @@ module Generation {
           |> Maybe.andThen(
             (field : FieldType) : Maybe(Island) {
               case (field) {
-                FieldType::Island idx conns =>
+                FieldType::Island(idx, conns) =>
                   try {
                     island =
                       {
@@ -202,7 +202,7 @@ module Generation {
 
           newConnection =
             case (existingConnection) {
-              Maybe::Just conn => { conn | connectionSize = conn.connectionSize + 1 }
+              Maybe::Just(conn) => { conn | connectionSize = conn.connectionSize + 1 }
 
               Maybe::Nothing =>
                 {
@@ -302,7 +302,7 @@ module Generation {
                                 res.furthestLocationIndex
 
                               case (neighbourIdx) {
-                                Maybe::Just idx2 =>
+                                Maybe::Just(idx2) =>
                                   if (res.isIslandIndex) {
                                     try {
                                       getIslandConnectionSizes(state0, idx2)
@@ -606,7 +606,7 @@ module Generation {
     |> Maybe.andThen(
       (field : FieldType) : Maybe(ConnectionSizes) {
         case (field) {
-          FieldType::Island idx conns => Maybe::Just(conns)
+          FieldType::Island(idx,conns) => Maybe::Just(conns)
           => Maybe::Nothing
         }
       })
@@ -658,10 +658,10 @@ module Generation {
                 shouldCheckIsland =
                   if (shouldCheckConnections) {
                     case (field) {
-                      Maybe::Just whatever =>
+                      Maybe::Just(whatever) =>
                         case (whatever) {
                           FieldType::Connection => false
-                          FieldType::Island idx conns => true
+                          FieldType::Island(idx, conns) => true
                         }
 
                       Maybe::Nothing => true
@@ -672,7 +672,7 @@ module Generation {
 
                 if (shouldCheckIsland) {
                   case (field) {
-                    Maybe::Just whatever =>
+                    Maybe::Just(whatever) =>
                       case (whatever) {
                         FieldType::Island => TraverseResult(Maybe::Just(idx), true, distance + 1)
                         FieldType::Connection => iterate(x + diff.x, y + diff.y, distance + 1, idx)
@@ -707,7 +707,7 @@ module Generation {
 
           if (res.isIslandIndex) {
             case (foundMin) {
-              Maybe::Just val => Maybe::Just(Math.min(val, res.distance))
+              Maybe::Just(val) => Maybe::Just(Math.min(val, res.distance))
 
               => Maybe::Just(res.distance)
             }

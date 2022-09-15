@@ -23,7 +23,7 @@ store App {
 
   fun watchUrl (seed : Number, params : GenerationParams) {
     case (lastUrlNavigationState) {
-      Maybe::Just tpl =>
+      Maybe::Just(tpl) =>
         try {
           {seed2, params2} =
             tpl

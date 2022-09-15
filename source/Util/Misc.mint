@@ -45,7 +45,7 @@ module Misc {
 
       t1 =
         case (t0) {
-          Maybe::Just val => log(text, val)
+          Maybe::Just(val) => log(text, val)
 
           => Maybe::Nothing
         }

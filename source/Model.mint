@@ -207,7 +207,7 @@ module Model {
             shouldCheckIsland =
               if (shouldCheckCollisions) {
                 case (Map.get(idx, puzzle.connections.fieldss)) {
-                  Maybe::Just whatever => false
+                  Maybe::Just(whatever) => false
                   Maybe::Nothing => true
                 }
               } else {
@@ -216,7 +216,7 @@ module Model {
 
             if (shouldCheckIsland) {
               case (Map.get(idx, puzzle.islands.fields)) {
-                Maybe::Just true => Maybe::Just(idx)
+                Maybe::Just(true) => Maybe::Just(idx)
                 => iterate(x + diff.x, y + diff.y)
               }
             } else {
@@ -377,7 +377,7 @@ module Model {
             {Array.push(newConnection, puzzle.connections.list), 1}
           }
 
-        Maybe::Just conn =>
+        Maybe::Just(conn) =>
           try {
             /* replace the found one */
             commonMaxConnectionSize =
@@ -567,7 +567,7 @@ module Model {
 
       if (isFromFilled) {
         case (fromIsland) {
-          Maybe::Just island =>
+          Maybe::Just(island) =>
             try {
               currentConnectionSize =
                 direction
@@ -580,7 +580,7 @@ module Model {
         }
       } else {
         case (fromIsland) {
-          Maybe::Just island =>
+          Maybe::Just(island) =>
             try {
               currentConnectionSize =
                 direction
@@ -646,7 +646,7 @@ module Model {
               xyIdx(puzzle.width, x, y)
 
             case (Map.get(idx, puzzle.connections.fieldss)) {
-              Maybe::Just pair =>
+              Maybe::Just(pair) =>
                 if (pair.idx1 == expectedIdx1 && pair.idx2 == expectedIdx2) {
                   /*
                   If there is connection but it's the one between

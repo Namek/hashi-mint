@@ -70,7 +70,7 @@ component Game.View {
       }
 
       case (Game.islandDrag) {
-        IslandDrag::SecondIslandPicked percent idx1 idx2 => renderTemporaryBridge(idx1, idx2, percent)
+        IslandDrag::SecondIslandPicked(percent, idx1, idx2) => renderTemporaryBridge(idx1, idx2, percent)
         => Html.empty()
       }
 

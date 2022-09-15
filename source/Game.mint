@@ -98,7 +98,7 @@ store Game {
 
   fun stepBack : Promise(Never, Void) {
     case (Array.last(moveHistory)) {
-      Maybe::Just move =>
+      Maybe::Just(move) =>
         next
           {
             puzzle =
@@ -144,9 +144,9 @@ store Game {
   fun isIslandHovered (idx : Number) : Bool {
     case (islandDrag) {
       IslandDrag::NoIslandsHovered => false
-      IslandDrag::FirstIslandHovered idx1 => idx1 == idx
-      IslandDrag::FirstIslandPinned idx1 => idx1 == idx
-      IslandDrag::SecondIslandPicked percent idx1 idx2 => idx1 == idx || idx2 == idx
+      IslandDrag::FirstIslandHovered(idx1) => idx1 == idx
+      IslandDrag::FirstIslandPinned(idx1) => idx1 == idx
+      IslandDrag::SecondIslandPicked(percent, idx1, idx2) => idx1 == idx || idx2 == idx
     }
   }
 
@@ -167,7 +167,7 @@ store Game {
 
   fun gotDragShouldStop : Promise(Never, Void) {
     case (islandDrag) {
-      IslandDrag::SecondIslandPicked percent idx1 idx2 =>
+      IslandDrag::SecondIslandPicked(percent, idx1, idx2) =>
         try {
           newPuzzle =
             Model.switchIslandConnections(
@@ -223,8 +223,8 @@ store Game {
 
       maybeFirstIslandIndex =
         case (islandDrag) {
-          IslandDrag::FirstIslandPinned idx => Maybe::Just(idx)
-          IslandDrag::SecondIslandPicked percent idx1 idx2 => Maybe::Just(idx1)
+          IslandDrag::FirstIslandPinned(idx) => Maybe::Just(idx)
+          IslandDrag::SecondIslandPicked(percent, idx1, idx2) => Maybe::Just(idx1)
           => Maybe::Nothing
         }
 
@@ -247,7 +247,7 @@ store Game {
               Model.findNeighbourIsland(puzzle, i1Idx, direction, false)
 
             case (neighbour) {
-              Maybe::Just i2Idx =>
+              Maybe::Just(i2Idx) =>
                 try {
                   neighbourPos =
                     getIslandRenderPos(i2Idx)
@@ -297,7 +297,7 @@ store Game {
                         {
                           islandDrag =
                             case (islandDrag) {
-                              IslandDrag::SecondIslandPicked percent idx1 idx2 => IslandDrag::FirstIslandPinned(idx1)
+                              IslandDrag::SecondIslandPicked(percent, idx1, idx2) => IslandDrag::FirstIslandPinned(idx1)
 
                               => islandDrag
                             }
@@ -320,7 +320,7 @@ store Game {
                 Maybe::Just(IslandDrag::SecondIslandPicked(distancePercent, i1Idx, i2Idx))
               } else {
                 case (islandDrag) {
-                  IslandDrag::SecondIslandPicked a b c => Maybe::Just(IslandDrag::NoIslandsHovered)
+                  IslandDrag::SecondIslandPicked(a, b, c) => Maybe::Just(IslandDrag::NoIslandsHovered)
                   => Maybe::Nothing
                 }
               }

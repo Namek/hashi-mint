@@ -14,7 +14,7 @@ module Maybe.Extra {
   */
   fun andThen (transform : Function(a, Maybe(b)), maybe : Maybe(a)) : Maybe(b) {
     case (maybe) {
-      Maybe::Just value => transform(value)
+      Maybe::Just(value) => transform(value)
       Maybe::Nothing => Maybe::Nothing
     }
   }
